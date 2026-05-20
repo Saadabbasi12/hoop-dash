@@ -74,8 +74,10 @@ export class GameScene extends Phaser.Scene {
 
     this._buildBackground();
 
-    // Graphics layer for ALL nets (drawn every frame)
+    // Net back layer (rows 0-2) — behind ball (depth 6)
     this.netGraphics = this.add.graphics().setDepth(6);
+    // Net front layer (rows 3+) — in front of ball (depth 8) for "ball inside net" look
+    this.netFrontGraphics = this.add.graphics().setDepth(8);
 
     this._initBaskets();
     this._initBall();
@@ -101,12 +103,57 @@ export class GameScene extends Phaser.Scene {
   // ── BACKGROUND ────────────────────────────────────────────────────────────
   _buildBackground() {
     const { W, H } = this;
+    const S = Math.min(W, H);
 
-    // Pure black background
+    // Deep navy base
     const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 1);
+    bg.fillGradientStyle(0x020509, 0x020509, 0x08101e, 0x08101e, 1);
     bg.fillRect(0, 0, W, H);
     bg.setDepth(-10);
+
+    // No brown floor — full dark arena background
+
+    // Court paint box lines
+    const courtG = this.add.graphics().setDepth(-8);
+    courtG.lineStyle(1.2, 0xd4a017, 0.08);
+    const pbW = S * 0.45, pbH2 = S * 0.28;
+    const courtRefY = H * 0.68;
+    courtG.strokeRect(W / 2 - pbW / 2, courtRefY - pbH2, pbW, pbH2 + (H - courtRefY) * 1.1);
+    courtG.lineStyle(1.2, 0xd4a017, 0.07);
+    courtG.lineBetween(W / 2 - pbW / 2, courtRefY - pbH2, W / 2 + pbW / 2, courtRefY - pbH2);
+    // Center circle
+    courtG.lineStyle(1, 0xd4a017, 0.065);
+    courtG.strokeCircle(W / 2, H * 0.5, S * 0.25);
+    // 3-point arc
+    courtG.lineStyle(1.2, 0xd4a017, 0.075);
+    courtG.beginPath();
+    courtG.arc(W / 2, H * 0.88, S * 0.46, Math.PI + 0.22, -0.22, false);
+    courtG.strokePath();
+
+    // Spotlight from arena ceiling
+    const spotG = this.add.graphics().setDepth(-7);
+    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.035, 0.035, 0, 0);
+    spotG.fillTriangle(W / 2 - S * 0.025, 0, W / 2 + S * 0.025, 0, W / 2 + S * 0.38, H * 0.75, W / 2 - S * 0.38, H * 0.75);
+    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.012, 0.012, 0, 0);
+    spotG.fillTriangle(0, 0, W * 0.08, 0, W * 0.45, H, 0, H);
+    spotG.fillTriangle(W * 0.92, 0, W, 0, W, H, W * 0.55, H);
+
+    // Stars in upper area
+    for (let i = 0; i < 45; i++) {
+      const star = this.add.circle(
+        Phaser.Math.Between(0, W), Phaser.Math.Between(0, H * 0.65),
+        Phaser.Math.FloatBetween(0.4, 1.8), 0xffffff, Phaser.Math.FloatBetween(0.08, 0.45)
+      ).setDepth(-6);
+      this.tweens.add({ targets: star, alpha: 0.03, duration: Phaser.Math.Between(700, 2400), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 2000) });
+    }
+
+    // Side accent bars
+    const accG = this.add.graphics().setDepth(-8);
+    accG.lineStyle(1.5, 0xff6b35, 0.10);
+    for (let y = 0; y < H; y += 50) {
+      accG.lineBetween(0, y, W * 0.04, y);
+      accG.lineBetween(W * 0.96, y, W, y);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -114,257 +161,140 @@ export class GameScene extends Phaser.Scene {
   // ══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Create a spring-physics net for a basket.
-   * Net nodes: grid of (NET_COLS+1) × (NET_ROWS+1) points.
-   * Top row is anchored (pinned) to the rim positions.
-   * Bottom row is free (net opening).
+   * Create a static-geometry net for a basket.
+   * Nodes are computed purely from rest geometry — no spring physics drift.
+   * A shake offset is animated on score for visual feedback.
    */
   _createNet(basket) {
-    const hs    = this.hoopScale;
-    const rimR  = RIM_RADIUS * hs;   // radius of the rim arc in screen px
-    const rimY  = basket.y;           // rim centre Y (where hoop image sits)
+    const hs        = this.hoopScale;
+    const rimR      = RIM_RADIUS * hs;
+    const rimWidth  = rimR * 2;
+    const netHeight = 56 * hs;
 
-    // Rim opening: left end = basket.x - rimR, right end = basket.x + rimR
-    const rimLeft  = basket.x - rimR;
-    const rimRight = basket.x + rimR;
-    const rimWidth = rimRight - rimLeft;
-
-    // Net hangs down from rim; net height
-    const netHeight = 52 * hs;
-
-    const cols = NET_COLS;
-    const rows = NET_ROWS;
-
-    // Build node grid
-    const nodes = [];
-    for (let r = 0; r <= rows; r++) {
-      const row = [];
-      const taper = r / rows; // 0 at top, 1 at bottom → net narrows
-      const halfW = (rimWidth / 2) * (1 - taper * 0.55); // bottom is ~45% narrower
-      for (let c = 0; c <= cols; c++) {
-        const t  = c / cols;
-        const cx = basket.x + (-halfW + t * halfW * 2);
-        const cy = rimY + (r / rows) * netHeight;
-        row.push({
-          x: cx, y: cy,
-          vx: 0, vy: 0,
-          pinned: r === 0, // top row pinned
-          restX: cx,       // rest position (anchors drift with basket)
-          restY: cy,
-          row: r, col: c
-        });
-      }
-      nodes.push(row);
-    }
-
-    // Structural springs: horizontal + vertical connections
-    const springs = [];
-    const restLen = (n1, n2) => Math.hypot(n2.restX - n1.restX, n2.restY - n1.restY);
-
-    for (let r = 0; r <= rows; r++) {
-      for (let c = 0; c <= cols; c++) {
-        const n = nodes[r][c];
-        if (c < cols) springs.push({ a: n, b: nodes[r][c + 1], len: restLen(n, nodes[r][c + 1]), k: NET_SPRING_K });
-        if (r < rows) springs.push({ a: n, b: nodes[r + 1][c], len: restLen(n, nodes[r + 1][c]), k: NET_SPRING_K * 0.9 });
-        // Diagonal for shear stability
-        if (r < rows && c < cols) springs.push({ a: n, b: nodes[r + 1][c + 1], len: restLen(n, nodes[r + 1][c + 1]), k: NET_SPRING_K * 0.55 });
-        if (r < rows && c > 0)    springs.push({ a: n, b: nodes[r + 1][c - 1], len: restLen(n, nodes[r + 1][c - 1]), k: NET_SPRING_K * 0.55 });
-      }
-    }
-
-    basket.net = { nodes, springs, rimLeft, rimRight, rimWidth, netHeight, rimY };
+    basket.net = {
+      rimR, rimWidth, netHeight,
+      shakeAmt: 0,
+      shakeDecay: 0,
+      dragOffsetX: 0,  // lateral pull from ball drag
+      dragOffsetY: 0
+    };
   }
 
-  /** Simulate one physics step for a basket's net */
+  /**
+   * Compute the node position for row r, col c from pure geometry.
+   * Top row = full rim width; bottom row = 38% width; all centred on basket.x
+   * shakeAmt adds a small lateral wobble for score feedback.
+   */
+  _netNode(basket, r, c) {
+    const net    = basket.net;
+    const rows   = NET_ROWS;
+    const cols   = NET_COLS;
+    const taper  = r / rows;                                  // 0 top → 1 bottom
+    const halfW  = (net.rimWidth / 2) * (1 - taper * 0.62);
+    const t      = c / cols;
+    const x      = basket.x - halfW + t * halfW * 2;
+    const y      = basket.y + taper * net.netHeight;
+    // Drag pull: top row stays pinned, bottom follows ball fully
+    const drag   = taper * taper; // quadratic — feels more elastic
+    const shake  = net.shakeAmt * taper * Math.sin(c * 1.1 + r * 0.7);
+    return {
+      x: x + shake + net.dragOffsetX * drag,
+      y: y        + net.dragOffsetY * drag
+    };
+  }
+
+  /** Tick net — update drag offset and shake decay */
   _stepNet(basket, dt) {
     const net = basket.net;
     if (!net) return;
-    const hs = this.hoopScale;
 
-    // Recompute rest positions for top row if basket moved
-    const taper0    = 0;
-    const rimR      = RIM_RADIUS * hs;
-    const rimLeft   = basket.x - rimR;
-    const rimRight  = basket.x + rimR;
-    const rimWidth  = rimRight - rimLeft;
-
-    for (let c = 0; c <= NET_COLS; c++) {
-      const t     = c / NET_COLS;
-      const n     = net.nodes[0][c];
-      n.restX     = basket.x + (-rimWidth / 2 + t * rimWidth);
-      n.restY     = basket.y;
-      n.x         = n.restX;  // pinned: snap to rest
-      n.y         = n.restY;
-    }
-
-    // Apply springs
-    for (const sp of net.springs) {
-      const dx   = sp.b.x - sp.a.x;
-      const dy   = sp.b.y - sp.a.y;
-      const dist = Math.hypot(dx, dy) || 0.001;
-      const f    = (dist - sp.len) * sp.k;
-      const fx   = (dx / dist) * f;
-      const fy   = (dy / dist) * f;
-      if (!sp.a.pinned) { sp.a.vx += fx * dt; sp.a.vy += fy * dt; }
-      if (!sp.b.pinned) { sp.b.vx -= fx * dt; sp.b.vy -= fy * dt; }
-    }
-
-    // Integrate + gravity + damping
-    for (let r = 1; r <= NET_ROWS; r++) {
-      for (let c = 0; c <= NET_COLS; c++) {
-        const n = net.nodes[r][c];
-        n.vy  += NET_GRAVITY * dt;
-        n.vx  *= NET_DAMPING;
-        n.vy  *= NET_DAMPING;
-        n.x   += n.vx * dt;
-        n.y   += n.vy * dt;
-      }
-    }
-
-    // Ball-inside-net interaction: push nodes away from ball if ball is inside
-    if (this.ballInsideNet && this.netBallBasket === basket) {
-      const ballR = 22 * this.ballScale;
-      for (let r = 1; r <= NET_ROWS; r++) {
-        for (let c = 0; c <= NET_COLS; c++) {
-          const n  = net.nodes[r][c];
-          const dx = n.x - this.ballX;
-          const dy = n.y - this.ballY;
-          const d  = Math.hypot(dx, dy);
-          if (d < ballR + 6) {
-            const push = (ballR + 6 - d) / (ballR + 6);
-            n.vx += (dx / (d || 1)) * push * 180;
-            n.vy += (dy / (d || 1)) * push * 180;
-          }
-        }
-      }
-    }
-
-    // Drag-pull: net bottom stretches toward where player is dragging (slingshot feel)
+    // Drag pull: only apply to the current (shooting) basket while dragging
     if (this.dragStart && !this.ballInFlight && basket === this.currentBasket) {
-      const ptr   = this.input.activePointer;
-      const rawDX = ptr.x - this.dragStart.x;
-      const rawDY = ptr.y - this.dragStart.y;
-      const dragLen = Math.hypot(rawDX, rawDY);
-      if (dragLen > 5) {
-        const ndx     = rawDX / dragLen;
-        const ndy     = rawDY / dragLen;
-        const pullStr = Math.min(dragLen * 0.22, 28);
-        for (let r = 1; r <= NET_ROWS; r++) {
-          const strength = r / NET_ROWS;
-          for (let c = 0; c <= NET_COLS; c++) {
-            const n = net.nodes[r][c];
-            n.vx += ndx * pullStr * strength * dt * 55;
-            n.vy += ndy * pullStr * strength * dt * 55;
-          }
-        }
-      }
-    }
-  }
-
-  /** Draw a basket's net using Graphics — premium white cord style */
-  _drawNet(basket, tintColor, alpha = 1) {
-    const net = basket.net;
-    if (!net) return;
-    const g    = this.netGraphics;
-    const rows = NET_ROWS;
-    const cols = NET_COLS;
-
-    // ── SHADOW PASS — slightly offset dark lines for cord depth ──────────
-    for (let c = 0; c <= cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        const n1 = net.nodes[r][c];
-        const n2 = net.nodes[r + 1][c];
-        const fade = (0.85 - (r / rows) * 0.6) * alpha;
-        g.lineStyle(2.8, 0x000000, fade * 0.4);
-        g.lineBetween(n1.x + 0.8, n1.y + 1, n2.x + 0.8, n2.y + 1);
-      }
-    }
-    for (let r = 1; r <= rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const n1 = net.nodes[r][c];
-        const n2 = net.nodes[r][c + 1];
-        const fade = (0.65 - (r / rows) * 0.45) * alpha;
-        g.lineStyle(1.8, 0x000000, fade * 0.35);
-        g.lineBetween(n1.x + 0.8, n1.y + 1, n2.x + 0.8, n2.y + 1);
-      }
+      const dx = this.ballX - this._ballRestX;
+      const dy = this.ballY - this._ballRestY;
+      net.dragOffsetX = dx;
+      net.dragOffsetY = dy;
+    } else {
+      // Smoothly spring back to rest when not dragging
+      net.dragOffsetX *= 0.75;
+      net.dragOffsetY *= 0.75;
     }
 
-    // ── MAIN CORD PASS ────────────────────────────────────────────────────
-    // Vertical strands — thicker at top, thinner toward bottom (realistic cord)
-    for (let c = 0; c <= cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        const n1 = net.nodes[r][c];
-        const n2 = net.nodes[r + 1][c];
-        const t    = r / rows;
-        const fade = (0.95 - t * 0.55) * alpha;
-        const thick = 2.2 - t * 0.7;
-        g.lineStyle(thick, 0xffffff, fade);
-        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
-      }
-    }
-
-    // Horizontal rings — slightly thinner
-    for (let r = 1; r <= rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const n1 = net.nodes[r][c];
-        const n2 = net.nodes[r][c + 1];
-        const t    = r / rows;
-        const fade = (0.80 - t * 0.50) * alpha;
-        const thick = 1.8 - t * 0.6;
-        g.lineStyle(thick, 0xeeeeee, fade);
-        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
-      }
-    }
-
-    // ── HIGHLIGHT PASS — bright sheen on top portions ─────────────────────
-    for (let c = 0; c <= cols; c++) {
-      const n1 = net.nodes[0][c];
-      const n2 = net.nodes[1][c];
-      g.lineStyle(1.2, 0xffffff, 0.9 * alpha);
-      g.lineBetween(n1.x, n1.y, n2.x, n2.y);
-    }
-
-    // ── RIM ATTACHMENT DOTS — knot nodes at top ────────────────────────────
-    for (let c = 0; c <= cols; c++) {
-      const n = net.nodes[0][c];
-      g.fillStyle(0xffffff, 0.7 * alpha);
-      g.fillCircle(n.x, n.y, 1.5);
+    // Shake decay
+    if (net.shakeAmt > 0) {
+      net.shakeAmt -= net.shakeDecay * dt;
+      if (net.shakeAmt < 0) net.shakeAmt = 0;
     }
   }
 
   /**
-   * Impulse: push net nodes downward from impact point — used on score
-   * Creates the dramatic "ball went through" net deformation
+   * Draw net using static geometry.
+   * Rows 0..NET_FRONT_ROW drawn on netGraphics (depth 6, behind ball).
+   * Rows NET_FRONT_ROW..NET_ROWS drawn on netFrontGraphics (depth 8, in front of ball).
+   * This makes the ball look like it's sitting INSIDE the net.
    */
-  _impulseNet(basket, impactX, impactY, force = 280) {
-    const net = basket.net;
+  _drawNet(basket, tintColor, alpha = 1) {
+    const net  = basket.net;
     if (!net) return;
-    for (let r = 0; r <= NET_ROWS; r++) {
-      for (let c = 0; c <= NET_COLS; c++) {
-        const n  = net.nodes[r][c];
-        if (n.pinned) continue;
-        const dx   = n.x - impactX;
-        const dy   = n.y - impactY;
-        const dist = Math.hypot(dx, dy) + 1;
-        const str  = force / (1 + dist * 0.08);
-        // Push mainly downward + slight radial
-        n.vy += str * (0.7 + Math.random() * 0.4);
-        n.vx += (dx / dist) * str * 0.35;
+    const rows = NET_ROWS;
+    const cols = NET_COLS;
+    // Rows 0-2 go behind the ball; rows 3+ go in front
+    const splitRow = 2;
+
+    const drawSegment = (g, fromRow, toRow) => {
+      // Vertical strands
+      for (let c = 0; c <= cols; c++) {
+        for (let r = fromRow; r < toRow; r++) {
+          const n1   = this._netNode(basket, r,     c);
+          const n2   = this._netNode(basket, r + 1, c);
+          const t    = r / rows;
+          const fade = (0.95 - t * 0.50) * alpha;
+          const thick = 2.0 - t * 0.6;
+          g.lineStyle(thick, 0xffffff, fade);
+          g.lineBetween(n1.x, n1.y, n2.x, n2.y);
+        }
       }
+      // Horizontal rings
+      for (let r = Math.max(fromRow, 1); r <= toRow; r++) {
+        for (let c = 0; c < cols; c++) {
+          const n1   = this._netNode(basket, r, c);
+          const n2   = this._netNode(basket, r, c + 1);
+          const t    = r / rows;
+          const fade = (0.80 - t * 0.45) * alpha;
+          const thick = 1.6 - t * 0.5;
+          g.lineStyle(thick, 0xdddddd, fade);
+          g.lineBetween(n1.x, n1.y, n2.x, n2.y);
+        }
+      }
+    };
+
+    // Back half (behind ball)
+    drawSegment(this.netGraphics, 0, splitRow);
+    // Front half (in front of ball)
+    drawSegment(this.netFrontGraphics, splitRow, rows);
+
+    // Rim knot dots at top (behind ball is fine)
+    for (let c = 0; c <= cols; c++) {
+      const n = this._netNode(basket, 0, c);
+      this.netGraphics.fillStyle(0xffffff, 0.7 * alpha);
+      this.netGraphics.fillCircle(n.x, n.y, 1.5);
     }
   }
 
-  /** Quickly restore net to rest (called when basket changes) */
+  /** Trigger a net shake animation on score — replaces spring impulse */
+  _impulseNet(basket, impactX, impactY, force = 280) {
+    const net = basket.net;
+    if (!net) return;
+    net.shakeAmt   = Math.min(force * 0.04, 10);
+    net.shakeDecay = net.shakeAmt * 4.5;
+  }
+
+  /** Reset net shake state */
   _resetNet(basket) {
     const net = basket.net;
     if (!net) return;
-    for (let r = 0; r <= NET_ROWS; r++) {
-      for (let c = 0; c <= NET_COLS; c++) {
-        const n = net.nodes[r][c];
-        n.x = n.restX; n.y = n.restY;
-        n.vx = 0; n.vy = 0;
-      }
-    }
+    net.shakeAmt   = 0;
+    net.shakeDecay = 0;
   }
 
   // ── BASKETS ───────────────────────────────────────────────────────────────
@@ -439,15 +369,7 @@ export class GameScene extends Phaser.Scene {
       b.y += dy;
       b.img.y += dy;
       b.scoreZone.y += dy;
-      // Shift all net nodes
-      if (b.net) {
-        for (let r = 0; r <= NET_ROWS; r++) {
-          for (let c = 0; c <= NET_COLS; c++) {
-            const n = b.net.nodes[r][c];
-            n.y += dy; n.restY += dy;
-          }
-        }
-      }
+      // Static net recomputes from basket.y each frame — no nodes to shift
     });
     if (!this.ballInFlight) { this.ballY += dy; this.ball.y = this.ballY; }
     [...this.obstacles, ...this.gems, ...this.powerups].forEach(o => { if (o.active) o.y += dy; });
@@ -489,9 +411,10 @@ export class GameScene extends Phaser.Scene {
     const rimY     = targetBasket.y;
     const exitY    = rimY + 55 * this.hoopScale;
 
-    // Mark ball as inside net (for net rendering to put it above ball)
+    // Mark ball as inside net — drop depth so net cords render over ball
     this.ballInsideNet = true;
     this.netBallBasket = targetBasket;
+    this.ball.setDepth(3); // behind netGraphics so cords visually wrap over ball
 
     // Big downward impulse on net nodes
     this._impulseNet(targetBasket, targetBasket.x, rimY + 10, 360);
@@ -535,6 +458,7 @@ export class GameScene extends Phaser.Scene {
           ease: 'Power2',
           onComplete: () => {
             this.ball.setAlpha(0);
+            this.ball.setDepth(7); // restore above net for next throw
             this.ballInsideNet = false;
             this.netBallBasket = null;
           }
@@ -547,31 +471,30 @@ export class GameScene extends Phaser.Scene {
   _initBall() {
     const { W, H } = this;
     const shortSide = Math.min(W, H);
-    // Target ~48px ball display diameter, scaled to screen
     const ballDisplayPx = Phaser.Math.Clamp(shortSide / 420 * 48, 36, 105);
     const ballTexW = this.textures.get('ball')?.source?.[0]?.width || 52;
     this.ballScale = ballDisplayPx / ballTexW;
-    // Ball sits INSIDE the net: offset downward from rim by ~1 ball radius
+    // Ball sits inside net: push down ~30% of net height so it's visually cradled
+    const netHeight = 56 * this.hoopScale;
     this.ballX = this.currentBasket.x;
-    this.ballY = this.currentBasket.y + 18 * this.ballScale;
+    this.ballY = this.currentBasket.y + netHeight * 0.30;
     this.ball = this.add.image(this.ballX, this.ballY, 'ball')
       .setScale(this.ballScale)
-      .setDepth(5);
+      .setDepth(7);  // above netGraphics back (depth 6), below netFrontGraphics (depth 8)
     this.dragLine       = this.add.graphics().setDepth(9);
     this.powerIndicator = this.add.graphics().setDepth(9);
   }
 
   _resetBall() {
+    const netHeight = 56 * this.hoopScale;
     this.ballX = this.currentBasket.x;
-    // Ball sits inside the net opening — slightly below the rim line
-    this.ballY = this.currentBasket.y + 18 * this.ballScale;
+    this.ballY = this.currentBasket.y + netHeight * 0.30;
     this.ballVX = this.ballVY = 0;
     this.ballRotation = 0;
     this.ballInFlight = false;
     this.ballInsideNet = false;
     this.netBallBasket = null;
-    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(5);
-    // Satisfying squish on landing
+    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(7);
     this.tweens.add({ targets: this.ball, scaleX: this.ballScale * 1.22, scaleY: this.ballScale * 0.80, duration: 110, yoyo: true, ease: 'Power2' });
     soundManager.playBounce();
   }
@@ -817,11 +740,26 @@ export class GameScene extends Phaser.Scene {
   _onPointerDown(ptr) {
     if (this.isPaused || this.isGameOver || this.ballInFlight) return;
     this.dragStart = { x: ptr.x, y: ptr.y };
+    // Store the ball's rest position so we can snap back if drag is too small
+    this._ballRestX = this.ballX;
+    this._ballRestY = this.ballY;
     soundManager.resume();
   }
 
   _onPointerMove(ptr) {
     if (!this.dragStart || this.isPaused || this.isGameOver || this.ballInFlight) return;
+
+    // Pull ball with the finger — offset from drag start, clamped to max pull distance
+    const rawDX  = ptr.x - this.dragStart.x;
+    const rawDY  = ptr.y - this.dragStart.y;
+    const dist   = Math.hypot(rawDX, rawDY);
+    const maxPull = 80; // px — how far ball can be pulled from rest
+    const clamp  = dist > maxPull ? maxPull / dist : 1;
+
+    this.ballX = this._ballRestX + rawDX * clamp;
+    this.ballY = this._ballRestY + rawDY * clamp;
+    this.ball.setPosition(this.ballX, this.ballY);
+
     this._drawAimGuide(ptr);
   }
 
@@ -835,7 +773,14 @@ export class GameScene extends Phaser.Scene {
     this.dragLine.clear();
     this.powerIndicator.clear();
 
-    if (dist < 8) { this.dragStart = null; return; }
+    if (dist < 8) {
+      // Snap ball back to rest
+      this.ballX = this._ballRestX;
+      this.ballY = this._ballRestY;
+      this.ball.setPosition(this.ballX, this.ballY);
+      this.dragStart = null;
+      return;
+    }
 
     const power = Math.min(dist * DRAG_SCALE, MAX_POWER);
     const angle = Math.atan2(dy, dx);
@@ -848,8 +793,8 @@ export class GameScene extends Phaser.Scene {
     // Raise ball above nets while in flight
     this.ball.setDepth(10);
 
-    // Release snap: give current basket net a gentle upward flick
-    this._impulseNet(this.currentBasket, this.ballX, this.ballY, -40);
+    // Net shake on release
+    this._impulseNet(this.currentBasket, this.ballX, this.ballY, 80);
 
     soundManager.playThrow();
   }
@@ -1164,6 +1109,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Draw nets ──────────────────────────────────────────────────────────
     this.netGraphics.clear();
+    this.netFrontGraphics.clear();
 
     // Current basket net (cyan)
     this._drawNet(this.currentBasket, 0x00e8c0, 0.75);
@@ -1224,16 +1170,6 @@ export class GameScene extends Phaser.Scene {
     } else if (!this.ballInsideNet) {
       // Ball resting or waiting — just update aim arrow
       this._updateAimArrow();
-      // Idle net gentle sway for current basket
-      if (!this.dragStart) {
-        const sway = Math.sin(this.frameCount * 0.04) * 0.8;
-        for (let r = 2; r <= NET_ROWS; r++) {
-          const strength = (r - 1) / NET_ROWS;
-          for (let c = 0; c <= NET_COLS; c++) {
-            this.currentBasket.net?.nodes[r][c] && (this.currentBasket.net.nodes[r][c].vx += sway * strength * dt * 10);
-          }
-        }
-      }
     }
   }
 
