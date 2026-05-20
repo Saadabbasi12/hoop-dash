@@ -101,57 +101,12 @@ export class GameScene extends Phaser.Scene {
   // ── BACKGROUND ────────────────────────────────────────────────────────────
   _buildBackground() {
     const { W, H } = this;
-    const S = Math.min(W, H);
 
-    // Deep navy base
+    // Pure black background
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x020509, 0x020509, 0x08101e, 0x08101e, 1);
+    bg.fillStyle(0x000000, 1);
     bg.fillRect(0, 0, W, H);
     bg.setDepth(-10);
-
-    // No brown floor — full dark arena background
-
-    // Court paint box lines
-    const courtG = this.add.graphics().setDepth(-8);
-    courtG.lineStyle(1.2, 0xd4a017, 0.08);
-    const pbW = S * 0.45, pbH2 = S * 0.28;
-    const courtRefY = H * 0.68;
-    courtG.strokeRect(W / 2 - pbW / 2, courtRefY - pbH2, pbW, pbH2 + (H - courtRefY) * 1.1);
-    courtG.lineStyle(1.2, 0xd4a017, 0.07);
-    courtG.lineBetween(W / 2 - pbW / 2, courtRefY - pbH2, W / 2 + pbW / 2, courtRefY - pbH2);
-    // Center circle
-    courtG.lineStyle(1, 0xd4a017, 0.065);
-    courtG.strokeCircle(W / 2, H * 0.5, S * 0.25);
-    // 3-point arc
-    courtG.lineStyle(1.2, 0xd4a017, 0.075);
-    courtG.beginPath();
-    courtG.arc(W / 2, H * 0.88, S * 0.46, Math.PI + 0.22, -0.22, false);
-    courtG.strokePath();
-
-    // Spotlight from arena ceiling
-    const spotG = this.add.graphics().setDepth(-7);
-    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.035, 0.035, 0, 0);
-    spotG.fillTriangle(W / 2 - S * 0.025, 0, W / 2 + S * 0.025, 0, W / 2 + S * 0.38, H * 0.75, W / 2 - S * 0.38, H * 0.75);
-    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.012, 0.012, 0, 0);
-    spotG.fillTriangle(0, 0, W * 0.08, 0, W * 0.45, H, 0, H);
-    spotG.fillTriangle(W * 0.92, 0, W, 0, W, H, W * 0.55, H);
-
-    // Stars in upper area
-    for (let i = 0; i < 45; i++) {
-      const star = this.add.circle(
-        Phaser.Math.Between(0, W), Phaser.Math.Between(0, H * 0.65),
-        Phaser.Math.FloatBetween(0.4, 1.8), 0xffffff, Phaser.Math.FloatBetween(0.08, 0.45)
-      ).setDepth(-6);
-      this.tweens.add({ targets: star, alpha: 0.03, duration: Phaser.Math.Between(700, 2400), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 2000) });
-    }
-
-    // Side accent bars
-    const accG = this.add.graphics().setDepth(-8);
-    accG.lineStyle(1.5, 0xff6b35, 0.10);
-    for (let y = 0; y < H; y += 50) {
-      accG.lineBetween(0, y, W * 0.04, y);
-      accG.lineBetween(W * 0.96, y, W, y);
-    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
