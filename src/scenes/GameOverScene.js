@@ -3,9 +3,7 @@ import { YTPlayables } from '../utils/YTPlayables.js';
 import { soundManager } from '../utils/SoundManager.js';
 
 export class GameOverScene extends Phaser.Scene {
-  constructor() {
-    super({ key: 'GameOverScene' });
-  }
+  constructor() { super({ key: 'GameOverScene' }); }
 
   init(data) {
     this.finalScore = data.score     || 0;
@@ -16,150 +14,182 @@ export class GameOverScene extends Phaser.Scene {
   create() {
     const W = this.scale.width;
     const H = this.scale.height;
-    this.cameras.main.setBackgroundColor('#0a0a1a');
+    const S = Math.min(W, H);
+
+    this.cameras.main.setBackgroundColor('#030812');
     this.cameras.main.fadeIn(400);
 
-    // Responsive helpers
-    const shortSide = Math.min(W, H);
-    const fs = (frac, max = 999) => Math.min(shortSide * frac, max);
+    const isNewBest = this.finalScore > 0 && this.finalScore >= this.bestScore;
 
-    // ── Stars ─────────────────────────────────────────────────────────────
-    for (let i = 0; i < 50; i++) {
-      const star = this.add.circle(
-        Phaser.Math.Between(0, W), Phaser.Math.Between(0, H),
-        Phaser.Math.FloatBetween(0.5, 2), 0xffffff, Phaser.Math.FloatBetween(0.1, 0.4)
-      );
-      this.tweens.add({ targets: star, alpha: 0.05, duration: Phaser.Math.Between(600, 1800), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 1000) });
-    }
-
-    // ── Panel ─────────────────────────────────────────────────────────────
-    const panelW = Math.min(W * 0.92, 420);
-    const panelH = Math.min(H * 0.80, 680);
-    const panelY = H / 2;
-    const panel  = this.add.rectangle(W / 2, panelY, panelW, panelH, 0x0d1b2a, 0.95);
-    panel.setStrokeStyle(2, 0xff6b35, 0.8);
-
-    // Corner accents
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
-      this.add.rectangle(W / 2 + sx * panelW / 2, panelY + sy * panelH / 2, 14, 14, 0xff6b35, 0.9);
-    });
-
-    // ── GAME OVER / NEW BEST title ─────────────────────────────────────────
-    const isNewBest  = this.finalScore >= this.bestScore && this.finalScore > 0;
-    const titleText  = isNewBest ? '🏆 NEW BEST!' : 'GAME OVER';
-    const titleColor = isNewBest ? '#ffd700' : '#ff4444';
-    const titleStroke= isNewBest ? '#aa8800' : '#aa0000';
-    const titleY     = panelY - panelH / 2 - fs(0.06, 28);
-
-    const title = this.add.text(W / 2, titleY, titleText, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
-      fontSize: `${fs(0.09, 46)}px`,
-      color: titleColor, stroke: titleStroke, strokeThickness: 5,
-      shadow: { color: titleColor, blur: 24, fill: true }
-    }).setOrigin(0.5).setAlpha(0);
-
-    this.tweens.add({ targets: title, alpha: 1, y: titleY, duration: 500, ease: 'Back.easeOut', delay: 100 });
-
-    // Confetti for new best
+    // ── CONFETTI for new best ──────────────────────────────────────────────
     if (isNewBest) {
-      this.time.delayedCall(300, () => {
-        for (let i = 0; i < 30; i++) {
-          this.time.delayedCall(i * 40, () => {
-            const x   = Phaser.Math.Between(W * 0.1, W * 0.9);
-            const col = [0xffd700, 0xff6b35, 0x00f5d4, 0xff4444][Phaser.Math.Between(0, 3)];
-            const p   = this.add.circle(x, H * 0.05, Phaser.Math.FloatBetween(3, 7), col).setDepth(20);
-            this.tweens.add({ targets: p, y: H * 0.4, x: x + Phaser.Math.Between(-60, 60), alpha: 0, duration: Phaser.Math.Between(600, 1200), ease: 'Power1', onComplete: () => p.destroy() });
+      this.time.delayedCall(200, () => {
+        for (let i = 0; i < 36; i++) {
+          this.time.delayedCall(i * 30, () => {
+            const x   = Phaser.Math.Between(W * 0.08, W * 0.92);
+            const col = [0xffd700, 0xff6b35, 0x00f5d4, 0xff3355, 0x00aaff][Phaser.Math.Between(0, 4)];
+            const p   = this.add.circle(x, H * 0.05, Phaser.Math.FloatBetween(3, 7), col).setDepth(30);
+            this.tweens.add({
+              targets: p, y: H * 0.55, x: x + Phaser.Math.Between(-80, 80),
+              alpha: 0, angle: Phaser.Math.Between(-180, 180),
+              duration: Phaser.Math.Between(700, 1300), ease: 'Power1',
+              onComplete: () => p.destroy()
+            });
           });
         }
       });
     }
 
-    // ── Score ─────────────────────────────────────────────────────────────
-    const scoreY = panelY - panelH * 0.28;
-    this.add.text(W / 2, scoreY, 'SCORE', {
-      fontFamily: 'Arial, sans-serif', fontSize: `${fs(0.038, 16)}px`,
-      color: '#778899', letterSpacing: 6
-    }).setOrigin(0.5).setAlpha(0.8);
+    // ── FIXED LAYOUT — divide screen into equal slots ──────────────────────
+    // Slot positions as % of H — calculated so nothing overlaps on any screen
+    const pad   = H * 0.05;          // top padding
+    const slots = 5;                  // title, score, stats, playBtn, menuBtn
+    const gap   = (H - pad * 2) / slots;
 
-    const scoreNum = this.add.text(W / 2, scoreY + fs(0.05, 22) + 10, this.finalScore.toString(), {
-      fontFamily: '"Arial Black", Impact, sans-serif', fontSize: `${fs(0.16, 80)}px`,
-      color: '#ffffff', shadow: { color: '#ff6b35', blur: 20, fill: true }
+    const titleY   = pad + gap * 0.5;
+    const scoreY   = pad + gap * 1.5;
+    const statsY   = pad + gap * 2.5;
+    const playBtnY = pad + gap * 3.5;
+    const menuBtnY = pad + gap * 4.5;
+
+    // ── TITLE ─────────────────────────────────────────────────────────────
+    const titleTxt = isNewBest ? '🏆  NEW BEST!' : 'GAME OVER';
+    const titleCol = isNewBest ? '#ffd700' : '#ff3355';
+    const titleSize = Math.min(S * 0.075, 38);
+
+    const title = this.add.text(W / 2, titleY, titleTxt, {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize: `${titleSize}px`,
+      color: titleCol,
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: title, alpha: 1, duration: 500, ease: 'Cubic.easeOut', delay: 100 });
+
+    // ── SCORE ─────────────────────────────────────────────────────────────
+    const labelSize = Math.min(S * 0.030, 13);
+    const scoreSize = Math.min(S * 0.15, 72);
+
+    this.add.text(W / 2, scoreY - scoreSize * 0.55, 'SCORE', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: `${labelSize}px`,
+      color: '#2a4060', letterSpacing: 7
+    }).setOrigin(0.5);
+
+    const scoreNum = this.add.text(W / 2, scoreY + scoreSize * 0.15, this.finalScore.toString(), {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize: `${scoreSize}px`,
+      color: '#ffffff',
     }).setOrigin(0.5).setAlpha(0).setScale(0.5);
+    this.tweens.add({ targets: scoreNum, alpha: 1, scaleX: 1, scaleY: 1, duration: 500, ease: 'Back.easeOut', delay: 250 });
 
-    this.tweens.add({ targets: scoreNum, alpha: 1, scaleX: 1, scaleY: 1, duration: 500, ease: 'Back.easeOut', delay: 300 });
+    // Thin divider above stats
+    const divG = this.add.graphics();
+    divG.lineStyle(1, 0xffffff, 0.15);
+    divG.lineBetween(W * 0.1, statsY - gap * 0.46, W * 0.9, statsY - gap * 0.46);
 
-    // ── Stat boxes ────────────────────────────────────────────────────────
-    const statsY = panelY + panelH * 0.02;
-    const statW  = panelW * 0.42;
-    this._statBox(W / 2 - statW * 0.55, statsY, statW, '🏆 BEST',    this.bestScore.toString(), 0xffd700, fs);
-    this._statBox(W / 2 + statW * 0.55, statsY, statW, '🏀 BASKETS', this.baskets.toString(),   0x00f5d4, fs);
+    // ── STAT BOXES ────────────────────────────────────────────────────────
+    const statW = Math.min(W * 0.40, 160);
+    const statH = Math.min(gap * 0.75, 64);
+    this._statBox(W / 2 - statW * 0.58, statsY, statW, statH, ' BEST',    this.bestScore.toString(), isNewBest ? 0xd4a017 : 0x778899, S);
+    this._statBox(W / 2 + statW * 0.58, statsY, statW, statH, ' BASKETS', this.baskets.toString(),   0x00c8a8, S);
 
-    // Divider
-    const div = this.add.graphics();
-    div.lineStyle(1, 0x334455, 0.8);
-    div.lineBetween(W / 2 - panelW * 0.4, statsY + 44, W / 2 + panelW * 0.4, statsY + 44);
+    // ── PLAY AGAIN BUTTON ─────────────────────────────────────────────────
+    const btnW  = Math.min(W * 0.60, 230);
+    const btnH  = Math.min(gap * 0.55, 48);
+    const btnR  = 6;
 
-    // ── Buttons ───────────────────────────────────────────────────────────
-    const btnAreaTop = panelY + panelH * 0.25;
-    const btnW       = Math.min(panelW * 0.8, 280);
-    const btnH       = Math.min(H * 0.072, 54);
-    const btnGap     = btnH * 1.5;
+    const playBg = this.add.graphics().setAlpha(0);
+    playBg.lineStyle(1.6, 0xff6b35, 0.85);
+    playBg.strokeRoundedRect(W / 2 - btnW / 2, playBtnY - btnH / 2, btnW, btnH, btnR);
 
-    const playBtn = this._createButton(W / 2, btnAreaTop,          btnW,       btnH, 'PLAY AGAIN', 0xff6b35, 0xff9900, 800, fs);
-    const menuBtn = this._createButton(W / 2, btnAreaTop + btnGap, btnW * 0.7, btnH * 0.85, 'MENU', 0x1a3a5a, 0x2a5a8a, 1000, fs);
+    const playTxt = this.add.text(W / 2, playBtnY, 'PLAY AGAIN', {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize: `${Math.min(S * 0.044, 18)}px`,
+      color: '#ff6b35', letterSpacing: 6,
+    }).setOrigin(0.5).setAlpha(0);
 
-    playBtn.on('click', () => {
+    this.tweens.add({ targets: [playBg, playTxt], alpha: 1, duration: 500, delay: 500, ease: 'Cubic.easeOut' });
+    this.time.delayedCall(1200, () => {
+      this.tweens.add({ targets: playBg, alpha: { from: 0.6, to: 1 }, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    });
+
+    // ── MENU BUTTON ───────────────────────────────────────────────────────
+    const menuBtnW = Math.min(W * 0.40, 150);
+    const menuBtnH = Math.min(gap * 0.45, 38);
+
+    const menuBg = this.add.graphics().setAlpha(0);
+    menuBg.lineStyle(1.2, 0xffffff, 0.35);
+    menuBg.strokeRoundedRect(W / 2 - menuBtnW / 2, menuBtnY - menuBtnH / 2, menuBtnW, menuBtnH, btnR);
+
+    const menuTxt = this.add.text(W / 2, menuBtnY, 'MENU', {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize: `${Math.min(S * 0.036, 15)}px`,
+      color: '#ffffff', letterSpacing: 8,
+    }).setOrigin(0.5).setAlpha(0);
+
+    this.tweens.add({ targets: [menuBg, menuTxt], alpha: 1, duration: 500, delay: 700, ease: 'Cubic.easeOut' });
+
+    // ── HIT AREAS ─────────────────────────────────────────────────────────
+    const playHit = this.add.rectangle(W / 2, playBtnY, btnW * 1.1, btnH * 1.6, 0xffffff, 0).setInteractive({ useHandCursor: true });
+    playHit.on('pointerdown', () => {
       soundManager.playClick();
       this.cameras.main.fadeOut(250, 0, 0, 0);
       this.time.delayedCall(250, () => this.scene.start('GameScene'));
     });
-    menuBtn.on('click', () => {
+    playHit.on('pointerover', () => {
+      this.tweens.killTweensOf(playBg);
+      playBg.clear(); playBg.lineStyle(1.8, 0xff6b35, 1);
+      playBg.strokeRoundedRect(W / 2 - btnW / 2, playBtnY - btnH / 2, btnW, btnH, btnR);
+      playBg.setAlpha(1); playTxt.setStyle({ color: '#ffffff' });
+    });
+    playHit.on('pointerout', () => {
+      playBg.clear(); playBg.lineStyle(1.6, 0xff6b35, 0.85);
+      playBg.strokeRoundedRect(W / 2 - btnW / 2, playBtnY - btnH / 2, btnW, btnH, btnR);
+      playBg.setAlpha(1); playTxt.setStyle({ color: '#ff6b35' });
+    });
+
+    const menuHit = this.add.rectangle(W / 2, menuBtnY, menuBtnW * 1.1, menuBtnH * 1.6, 0xffffff, 0).setInteractive({ useHandCursor: true });
+    menuHit.on('pointerdown', () => {
       soundManager.playClick();
       this.cameras.main.fadeOut(250, 0, 0, 0);
       this.time.delayedCall(250, () => this.scene.start('MenuScene'));
     });
+    menuHit.on('pointerover', () => {
+      menuBg.clear(); menuBg.lineStyle(1.4, 0xd4a017, 1);
+      menuBg.strokeRoundedRect(W / 2 - menuBtnW / 2, menuBtnY - menuBtnH / 2, menuBtnW, menuBtnH, btnR);
+      menuBg.setAlpha(1); menuTxt.setStyle({ color: '#d4a017' });
+    });
+    menuHit.on('pointerout', () => {
+      menuBg.clear(); menuBg.lineStyle(1.2, 0xffffff, 0.35);
+      menuBg.strokeRoundedRect(W / 2 - menuBtnW / 2, menuBtnY - menuBtnH / 2, menuBtnW, menuBtnH, btnR);
+      menuBg.setAlpha(1); menuTxt.setStyle({ color: '#ffffff' });
+    });
 
-    // ── Save ──────────────────────────────────────────────────────────────
+    // ── SAVE ──────────────────────────────────────────────────────────────
     if (this.finalScore > 0) {
       YTPlayables.saveData({ bestScore: this.bestScore, lastScore: this.finalScore }).catch(() => {});
       YTPlayables.sendScore(this.bestScore);
     }
   }
 
-  _statBox(x, y, w, label, value, color, fs) {
-    this.add.rectangle(x, y, w, 70, 0x111d2e).setStrokeStyle(1.5, color, 0.5);
-    this.add.text(x, y - 14, label, {
-      fontFamily: 'Arial, sans-serif', fontSize: `${fs(0.032, 13)}px`, color: '#778899', letterSpacing: 2
-    }).setOrigin(0.5);
-    this.add.text(x, y + 14, value, {
-      fontFamily: '"Arial Black", Impact, sans-serif', fontSize: `${fs(0.065, 28)}px`,
-      color: Phaser.Display.Color.IntegerToColor(color).rgba
-    }).setOrigin(0.5);
-  }
+  _statBox(x, y, w, h, label, value, color, S) {
+    const hexColor = '#' + color.toString(16).padStart(6, '0');
+    const g = this.add.graphics();
+    g.fillStyle(color, 0.10);
+    g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
+    g.lineStyle(2, color, 1);
+    g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10);
 
-  _createButton(x, y, w, h, label, fillColor, strokeColor, delay = 0, fs) {
-    const emitter = new Phaser.Events.EventEmitter();
-    const bg  = this.add.rectangle(x, y, w, h, fillColor).setStrokeStyle(2.5, strokeColor).setAlpha(0);
-    const txt = this.add.text(x, y, label, {
+    this.add.text(x, y - h * 0.20, label, {
       fontFamily: '"Arial Black", Impact, sans-serif',
-      fontSize: `${fs ? fs(0.055, 24) : 22}px`,
-      color: '#ffffff', stroke: '#000000', strokeThickness: 3
-    }).setOrigin(0.5).setAlpha(0);
+      fontSize: `${Math.min(S * 0.028, 12)}px`,
+      color: '#ffffff',
+      letterSpacing: 2,
+    }).setOrigin(0.5).setAlpha(0.9);
 
-    this.tweens.add({ targets: [bg, txt], alpha: 1, y: y - 3, duration: 400, delay, ease: 'Back.easeOut' });
-
-    bg.setInteractive({ useHandCursor: true });
-    txt.setInteractive({ useHandCursor: true });
-    bg.on('pointerdown',  () => emitter.emit('click'));
-    txt.on('pointerdown', () => emitter.emit('click'));
-
-    bg.on('pointerover', () => this.tweens.add({ targets: [bg, txt], scaleX: 1.05, scaleY: 1.05, duration: 100 }));
-    bg.on('pointerout',  () => this.tweens.add({ targets: [bg, txt], scaleX: 1,    scaleY: 1,    duration: 100 }));
-
-    this.time.delayedCall(delay + 500, () => {
-      this.tweens.add({ targets: bg, scaleX: 1.02, scaleY: 1.02, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    });
-
-    return emitter;
+    this.add.text(x, y + h * 0.20, value, {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize: `${Math.min(S * 0.068, 28)}px`,
+      color: hexColor,
+    }).setOrigin(0.5);
   }
 }

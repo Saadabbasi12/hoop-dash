@@ -44,7 +44,6 @@ export class GameScene extends Phaser.Scene {
     this.combo        = 0;
     this.comboTimer   = 0;
     this.isPaused     = false;
-    this._manualPause = false;
     this.isGameOver   = false;
     this.ballInFlight = false;
     this.dragStart    = null;
@@ -102,22 +101,56 @@ export class GameScene extends Phaser.Scene {
   // ── BACKGROUND ────────────────────────────────────────────────────────────
   _buildBackground() {
     const { W, H } = this;
+    const S = Math.min(W, H);
+
+    // Deep navy base
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x050510, 0x050510, 0x0d1b2a, 0x0d1b2a, 1);
+    bg.fillGradientStyle(0x020509, 0x020509, 0x08101e, 0x08101e, 1);
     bg.fillRect(0, 0, W, H);
     bg.setDepth(-10);
-    for (let i = 0; i < 50; i++) {
+
+    // No brown floor — full dark arena background
+
+    // Court paint box lines
+    const courtG = this.add.graphics().setDepth(-8);
+    courtG.lineStyle(1.2, 0xd4a017, 0.08);
+    const pbW = S * 0.45, pbH2 = S * 0.28;
+    const courtRefY = H * 0.68;
+    courtG.strokeRect(W / 2 - pbW / 2, courtRefY - pbH2, pbW, pbH2 + (H - courtRefY) * 1.1);
+    courtG.lineStyle(1.2, 0xd4a017, 0.07);
+    courtG.lineBetween(W / 2 - pbW / 2, courtRefY - pbH2, W / 2 + pbW / 2, courtRefY - pbH2);
+    // Center circle
+    courtG.lineStyle(1, 0xd4a017, 0.065);
+    courtG.strokeCircle(W / 2, H * 0.5, S * 0.25);
+    // 3-point arc
+    courtG.lineStyle(1.2, 0xd4a017, 0.075);
+    courtG.beginPath();
+    courtG.arc(W / 2, H * 0.88, S * 0.46, Math.PI + 0.22, -0.22, false);
+    courtG.strokePath();
+
+    // Spotlight from arena ceiling
+    const spotG = this.add.graphics().setDepth(-7);
+    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.035, 0.035, 0, 0);
+    spotG.fillTriangle(W / 2 - S * 0.025, 0, W / 2 + S * 0.025, 0, W / 2 + S * 0.38, H * 0.75, W / 2 - S * 0.38, H * 0.75);
+    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.012, 0.012, 0, 0);
+    spotG.fillTriangle(0, 0, W * 0.08, 0, W * 0.45, H, 0, H);
+    spotG.fillTriangle(W * 0.92, 0, W, 0, W, H, W * 0.55, H);
+
+    // Stars in upper area
+    for (let i = 0; i < 45; i++) {
       const star = this.add.circle(
-        Phaser.Math.Between(0, W), Phaser.Math.Between(0, H),
-        Phaser.Math.FloatBetween(0.5, 2), 0xffffff, Phaser.Math.FloatBetween(0.1, 0.5)
-      ).setDepth(-9);
-      this.tweens.add({ targets: star, alpha: 0.05, duration: Phaser.Math.Between(800, 2200), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 1500) });
+        Phaser.Math.Between(0, W), Phaser.Math.Between(0, H * 0.65),
+        Phaser.Math.FloatBetween(0.4, 1.8), 0xffffff, Phaser.Math.FloatBetween(0.08, 0.45)
+      ).setDepth(-6);
+      this.tweens.add({ targets: star, alpha: 0.03, duration: Phaser.Math.Between(700, 2400), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 2000) });
     }
-    const acc = this.add.graphics().setDepth(-8);
-    acc.lineStyle(2, 0xff6b35, 0.12);
+
+    // Side accent bars
+    const accG = this.add.graphics().setDepth(-8);
+    accG.lineStyle(1.5, 0xff6b35, 0.10);
     for (let y = 0; y < H; y += 50) {
-      acc.lineBetween(0, y, W * 0.05, y);
-      acc.lineBetween(W * 0.95, y, W, y);
+      accG.lineBetween(0, y, W * 0.04, y);
+      accG.lineBetween(W * 0.96, y, W, y);
     }
   }
 
@@ -273,33 +306,74 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Draw a basket's net using Graphics */
+  /** Draw a basket's net using Graphics — premium white cord style */
   _drawNet(basket, tintColor, alpha = 1) {
     const net = basket.net;
     if (!net) return;
-    const g   = this.netGraphics;
+    const g    = this.netGraphics;
     const rows = NET_ROWS;
     const cols = NET_COLS;
 
-    // Vertical strands
+    // ── SHADOW PASS — slightly offset dark lines for cord depth ──────────
     for (let c = 0; c <= cols; c++) {
       for (let r = 0; r < rows; r++) {
         const n1 = net.nodes[r][c];
         const n2 = net.nodes[r + 1][c];
-        const fade = 0.9 - (r / rows) * 0.5; // fade toward bottom
-        g.lineStyle(1.5, tintColor, fade * alpha);
-        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
+        const fade = (0.85 - (r / rows) * 0.6) * alpha;
+        g.lineStyle(2.8, 0x000000, fade * 0.4);
+        g.lineBetween(n1.x + 0.8, n1.y + 1, n2.x + 0.8, n2.y + 1);
       }
     }
-    // Horizontal strands
     for (let r = 1; r <= rows; r++) {
       for (let c = 0; c < cols; c++) {
         const n1 = net.nodes[r][c];
         const n2 = net.nodes[r][c + 1];
-        const fade = 0.75 - (r / rows) * 0.45;
-        g.lineStyle(1.2, tintColor, fade * alpha);
+        const fade = (0.65 - (r / rows) * 0.45) * alpha;
+        g.lineStyle(1.8, 0x000000, fade * 0.35);
+        g.lineBetween(n1.x + 0.8, n1.y + 1, n2.x + 0.8, n2.y + 1);
+      }
+    }
+
+    // ── MAIN CORD PASS ────────────────────────────────────────────────────
+    // Vertical strands — thicker at top, thinner toward bottom (realistic cord)
+    for (let c = 0; c <= cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const n1 = net.nodes[r][c];
+        const n2 = net.nodes[r + 1][c];
+        const t    = r / rows;
+        const fade = (0.95 - t * 0.55) * alpha;
+        const thick = 2.2 - t * 0.7;
+        g.lineStyle(thick, 0xffffff, fade);
         g.lineBetween(n1.x, n1.y, n2.x, n2.y);
       }
+    }
+
+    // Horizontal rings — slightly thinner
+    for (let r = 1; r <= rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const n1 = net.nodes[r][c];
+        const n2 = net.nodes[r][c + 1];
+        const t    = r / rows;
+        const fade = (0.80 - t * 0.50) * alpha;
+        const thick = 1.8 - t * 0.6;
+        g.lineStyle(thick, 0xeeeeee, fade);
+        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
+      }
+    }
+
+    // ── HIGHLIGHT PASS — bright sheen on top portions ─────────────────────
+    for (let c = 0; c <= cols; c++) {
+      const n1 = net.nodes[0][c];
+      const n2 = net.nodes[1][c];
+      g.lineStyle(1.2, 0xffffff, 0.9 * alpha);
+      g.lineBetween(n1.x, n1.y, n2.x, n2.y);
+    }
+
+    // ── RIM ATTACHMENT DOTS — knot nodes at top ────────────────────────────
+    for (let c = 0; c <= cols; c++) {
+      const n = net.nodes[0][c];
+      g.fillStyle(0xffffff, 0.7 * alpha);
+      g.fillCircle(n.x, n.y, 1.5);
     }
   }
 
@@ -518,26 +592,33 @@ export class GameScene extends Phaser.Scene {
   _initBall() {
     const { W, H } = this;
     const shortSide = Math.min(W, H);
-    this.ballScale  = Phaser.Math.Clamp(shortSide / 420, 0.75, 2.2);
+    // Target ~48px ball display diameter, scaled to screen
+    const ballDisplayPx = Phaser.Math.Clamp(shortSide / 420 * 48, 36, 105);
+    const ballTexW = this.textures.get('ball')?.source?.[0]?.width || 52;
+    this.ballScale = ballDisplayPx / ballTexW;
+    // Ball sits INSIDE the net: offset downward from rim by ~1 ball radius
     this.ballX = this.currentBasket.x;
-    this.ballY = this.currentBasket.y - 20;
+    this.ballY = this.currentBasket.y + 18 * this.ballScale;
     this.ball = this.add.image(this.ballX, this.ballY, 'ball')
       .setScale(this.ballScale)
-      .setDepth(10); // high depth; nets are depth 6 so ball is above by default
+      .setDepth(5);
     this.dragLine       = this.add.graphics().setDepth(9);
     this.powerIndicator = this.add.graphics().setDepth(9);
   }
 
   _resetBall() {
     this.ballX = this.currentBasket.x;
-    this.ballY = this.currentBasket.y - 20;
+    // Ball sits inside the net opening — slightly below the rim line
+    this.ballY = this.currentBasket.y + 18 * this.ballScale;
     this.ballVX = this.ballVY = 0;
     this.ballRotation = 0;
     this.ballInFlight = false;
     this.ballInsideNet = false;
     this.netBallBasket = null;
-    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale);
-    this.tweens.add({ targets: this.ball, scaleX: this.ballScale * 1.18, scaleY: this.ballScale * 0.84, duration: 120, yoyo: true, ease: 'Power2' });
+    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(5);
+    // Satisfying squish on landing
+    this.tweens.add({ targets: this.ball, scaleX: this.ballScale * 1.22, scaleY: this.ballScale * 0.80, duration: 110, yoyo: true, ease: 'Power2' });
+    soundManager.playBounce();
   }
 
   // ── OBSTACLES ─────────────────────────────────────────────────────────────
@@ -648,53 +729,95 @@ export class GameScene extends Phaser.Scene {
   _createUI() {
     const { W, H } = this;
     const D  = 50;
+    const S  = Math.min(W, H);
     const fs = this._fs.bind(this);
 
-    const scoreH    = Math.min(H * 0.06, 48);
-    const scorePadY = scoreH / 2 + 6;
+    // ── TOP BAR — glass pill HUD ──────────────────────────────────────────
+    const barH    = Math.min(H * 0.065, 50);
+    const barY    = barH * 0.52 + 4;
+    const barPad  = 6;
 
-    this.scoreBg   = this.add.rectangle(W / 2, scorePadY, Math.min(W * 0.35, 140), scoreH, 0x000000, 0.55)
-      .setStrokeStyle(2, 0xff6b35, 0.6).setDepth(D).setScrollFactor(0);
-    this.scoreText = this.add.text(W / 2, scorePadY, '0', {
+    // Full-width frosted top bar
+    const topBarG = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
+    topBarG.fillStyle(0x000000, 0.55);
+    topBarG.fillRect(0, 0, W, barH + barPad * 2);
+    // Bottom border line
+    topBarG.lineStyle(1, 0xff6b35, 0.25);
+    topBarG.lineBetween(0, barH + barPad * 2, W, barH + barPad * 2);
+    // Top shine
+    topBarG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.04, 0.04, 0, 0);
+    topBarG.fillRect(0, 0, W, 2);
+
+    // ── SCORE — center pill ────────────────────────────────────────────────
+    const scorePillW = Math.min(W * 0.3, 120);
+    const scorePillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0);
+    scorePillG.fillStyle(0xff6b35, 0.15);
+    scorePillG.fillRoundedRect(W / 2 - scorePillW / 2, barPad, scorePillW, barH, barH / 2);
+    scorePillG.lineStyle(1.5, 0xff6b35, 0.5);
+    scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, barPad, scorePillW, barH, barH / 2);
+
+    this.scoreText = this.add.text(W / 2, barY, '0', {
       fontFamily: '"Arial Black", Impact, sans-serif',
-      fontSize: `${fs(0.07, 32)}px`, color: '#ffffff',
-      shadow: { color: '#ff6b35', blur: 8, fill: true }
+      fontSize: `${fs(0.07, 30)}px`,
+      color: '#ffffff',
+      shadow: { color: '#ff6b35', blur: 10, fill: true }
     }).setOrigin(0.5).setDepth(D).setScrollFactor(0);
 
-    const heartX = Math.min(W * 0.08, 36);
-    this.livesContainer = this.add.container(heartX, scorePadY).setDepth(D).setScrollFactor(0);
+    // ── LIVES — left side with label ──────────────────────────────────────
+    const livesX = Math.min(W * 0.06, 28);
+    this.livesContainer = this.add.container(livesX, barY).setDepth(D).setScrollFactor(0);
     this.heartIcons = [];
     this._refreshHearts();
 
-    this.comboText = this.add.text(W / 2, scorePadY + scoreH + 4, '', {
+    // ── COMBO TEXT ────────────────────────────────────────────────────────
+    this.comboText = this.add.text(W / 2, barH + barPad * 2 + 6, '', {
       fontFamily: '"Arial Black", Impact, sans-serif',
-      fontSize: `${fs(0.05, 22)}px`, color: '#ffcc00',
-      stroke: '#cc8800', strokeThickness: 2
+      fontSize: `${fs(0.052, 22)}px`,
+      color: '#ffd700',
+      stroke: '#cc8800',
+      strokeThickness: 2,
+      shadow: { color: '#ffaa00', blur: 12, fill: true }
     }).setOrigin(0.5).setDepth(D).setAlpha(0).setScrollFactor(0);
 
-    this.powerupText = this.add.text(W / 2, H - Math.min(H * 0.03, 22), '', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: `${fs(0.038, 16)}px`, color: '#aaffff',
-      stroke: '#0044aa', strokeThickness: 2
+    // ── POWERUP INDICATOR — bottom center glass pill ───────────────────────
+    const puPillW = Math.min(W * 0.55, 200);
+    const puPillH = Math.min(H * 0.038, 28);
+    const puY = H - puPillH - 8;
+
+    this.puPillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0).setAlpha(0);
+    this.puPillG.fillStyle(0x000000, 0.6);
+    this.puPillG.fillRoundedRect(W / 2 - puPillW / 2, puY, puPillW, puPillH, puPillH / 2);
+    this.puPillG.lineStyle(1, 0x4895ef, 0.5);
+    this.puPillG.strokeRoundedRect(W / 2 - puPillW / 2, puY, puPillW, puPillH, puPillH / 2);
+
+    this.powerupText = this.add.text(W / 2, puY + puPillH / 2, '', {
+      fontFamily: '"Arial", sans-serif',
+      fontSize: `${fs(0.038, 14)}px`,
+      color: '#aaffff',
     }).setOrigin(0.5).setDepth(D).setAlpha(0).setScrollFactor(0);
 
-    this.aimArrow = this.add.image(0, 0, 'arrow').setAlpha(0).setScale(0.7).setDepth(D - 1);
+    // ── AIM ARROW ─────────────────────────────────────────────────────────
+    this.aimArrow = this.add.image(0, 0, 'arrow').setAlpha(0).setScale(0.65).setDepth(D - 1);
 
-    const pauseSize = Math.min(W * 0.09, 44);
-    this.pauseBtn = this.add.text(W - pauseSize * 0.7, pauseSize * 0.7, '⏸', {
-      fontSize: `${pauseSize * 0.7}px`
-    }).setOrigin(0.5).setDepth(D).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-    this.pauseBtn.on('pointerdown', () => this._togglePause());
+    // Pause handled by YouTube — no pause button in game
+
+    // ── SIDE ACCENT LINES ─────────────────────────────────────────────────
+    const sideG = this.add.graphics().setDepth(-7).setScrollFactor(0);
+    sideG.lineStyle(2, 0xff6b35, 0.12);
+    for (let y = 0; y < H; y += 50) {
+      sideG.lineBetween(0, y, W * 0.04, y);
+      sideG.lineBetween(W * 0.96, y, W, y);
+    }
   }
 
   _refreshHearts() {
     this.heartIcons.forEach(h => h.destroy());
     this.heartIcons = [];
     this.livesContainer.removeAll(true);
-    const heartSize = this._fs(0.045, 20);
-    const spacing   = heartSize * 1.4;
+    const heartSize = this._fs(0.048, 20);
+    const spacing   = heartSize * 1.3;
     for (let i = 0; i < 3; i++) {
-      const h = this.add.text(i * spacing, 0, i < this.lives ? '❤️' : '🖤', { fontSize: `${heartSize}px` }).setOrigin(0.5);
+      const h = this.add.text(i * spacing, 0, i < this.lives ? '❤️' : '🖤', { fontSize: `${heartSize}px` }).setOrigin(0, 0.5);
       this.livesContainer.add(h);
       this.heartIcons.push(h);
     }
@@ -706,9 +829,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   _updatePowerupUI() {
-    if (this.shieldActive)    this.powerupText.setText(`🛡️ Shield: ${Math.ceil(this.shieldTimer)}s`).setAlpha(1);
-    else if (this.slowActive) this.powerupText.setText(`⏱️ Slow: ${Math.ceil(this.slowTimer)}s`).setAlpha(1);
-    else                      this.powerupText.setAlpha(0);
+    if (this.shieldActive) {
+      this.powerupText.setText(`🛡️ Shield: ${Math.ceil(this.shieldTimer)}s`).setAlpha(1);
+      if (this.puPillG) this.puPillG.setAlpha(1);
+    } else if (this.slowActive) {
+      this.powerupText.setText(`⏱️ Slow: ${Math.ceil(this.slowTimer)}s`).setAlpha(1);
+      if (this.puPillG) this.puPillG.setAlpha(1);
+    } else {
+      this.powerupText.setAlpha(0);
+      if (this.puPillG) this.puPillG.setAlpha(0);
+    }
   }
 
   _updateAimArrow() {
@@ -726,7 +856,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', this._onPointerDown, this);
     this.input.on('pointermove', this._onPointerMove, this);
     this.input.on('pointerup',   this._onPointerUp,   this);
-    this.input.keyboard?.on('keydown-P', () => this._togglePause());
+    // No manual pause — YouTube controls pause/resume
   }
 
   _onPointerDown(ptr) {
@@ -760,6 +890,9 @@ export class GameScene extends Phaser.Scene {
     this.ballInFlight = true;
     this.dragStart    = null;
 
+    // Raise ball above nets while in flight
+    this.ball.setDepth(10);
+
     // Release snap: give current basket net a gentle upward flick
     this._impulseNet(this.currentBasket, this.ballX, this.ballY, -40);
 
@@ -780,77 +913,64 @@ export class GameScene extends Phaser.Scene {
 
     const vx = Math.cos(angle) * power * 880;
     const vy = Math.sin(angle) * power * 880;
-    const step = 0.04;
+    const step = 0.035;
     let px = this.ballX, py = this.ballY, pvx = vx, pvy = vy;
-    for (let i = 0; i < 22; i++) {
+
+    // Premium glowing trajectory dots
+    for (let i = 0; i < 24; i++) {
       pvy += GRAVITY * step;
       px  += pvx * step;
       py  += pvy * step;
       if (i % 2 === 0) {
-        const alpha = 0.7 - i * 0.028;
-        this.dragLine.fillStyle(0xffffff, Math.max(alpha, 0.05));
-        this.dragLine.fillCircle(px, py, 4);
+        const t = i / 24;
+        const alpha = (0.85 - t * 0.75);
+        const radius = 4 - t * 1.5;
+        // Outer glow
+        this.dragLine.fillStyle(0xff6b35, alpha * 0.25);
+        this.dragLine.fillCircle(px, py, radius * 2);
+        // Core dot
+        this.dragLine.fillStyle(0xffffff, alpha);
+        this.dragLine.fillCircle(px, py, Math.max(radius, 1.2));
       }
     }
 
-    const barW = Math.min(W * 0.35, 130);
-    const barH = 8;
+    // Power meter — premium glass bar
+    const barW = Math.min(W * 0.32, 120);
+    const barH = 6;
     const barX = this.ballX - barW / 2;
-    const barY = this.ballY + 34;
-    this.powerIndicator.fillStyle(0x000000, 0.5);
-    this.powerIndicator.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
-    const col = power < 0.4 ? 0x00ff88 : power < 0.75 ? 0xffcc00 : 0xff4444;
-    this.powerIndicator.fillStyle(col, 1);
-    this.powerIndicator.fillRect(barX, barY, barW * power, barH);
+    const barY2 = this.ballY + 40;
+    const barR = 3;
 
-    this.dragLine.lineStyle(3, 0xff6b35, 0.7);
-    this.dragLine.lineBetween(this.ballX, this.ballY, this.ballX + Math.cos(angle) * 45, this.ballY + Math.sin(angle) * 45);
+    // Track
+    this.powerIndicator.fillStyle(0x000000, 0.6);
+    this.powerIndicator.fillRoundedRect(barX - 1, barY2 - 1, barW + 2, barH + 2, barR);
+    // Fill — color-coded
+    const col = power < 0.4 ? 0x00e8a0 : power < 0.72 ? 0xffc400 : 0xff3355;
+    this.powerIndicator.fillStyle(col, 0.95);
+    this.powerIndicator.fillRoundedRect(barX, barY2, barW * power, barH, barR);
+    // Shine
+    this.powerIndicator.fillStyle(0xffffff, 0.25);
+    this.powerIndicator.fillRoundedRect(barX, barY2, barW * power, barH * 0.45, { tl: barR, tr: barR, bl: 0, br: 0 });
+    // End cap glow
+    if (power > 0.05) {
+      this.powerIndicator.fillStyle(col, 0.6);
+      this.powerIndicator.fillCircle(barX + barW * power, barY2 + barH / 2, 5);
+    }
+
+    // Direction line from ball
+    this.dragLine.lineStyle(2.5, 0xff6b35, 0.6);
+    this.dragLine.lineBetween(this.ballX, this.ballY, this.ballX + Math.cos(angle) * 40, this.ballY + Math.sin(angle) * 40);
   }
 
   // ── YT CALLBACKS ──────────────────────────────────────────────────────────
   _setupYTCallbacks() {
     YTPlayables.onPause(() => { this.isPaused = true; this._saveProgress(); });
-    YTPlayables.onResume(() => { if (this.isPaused && !this._manualPause) this.isPaused = false; });
+    YTPlayables.onResume(() => { this.isPaused = false; soundManager.resume(); });
     YTPlayables.onAudioEnabledChange(en => soundManager.setEnabled(en));
     soundManager.setEnabled(YTPlayables.isAudioEnabled());
   }
 
-  _togglePause() {
-    if (this.isGameOver) return;
-    this._manualPause = !this._manualPause;
-    this.isPaused     = this._manualPause;
-    if (this.isPaused) {
-      soundManager.playClick();
-      this.pauseBtn.setText('▶️');
-      this._showPauseOverlay();
-      this._saveProgress();
-    } else {
-      soundManager.playClick();
-      soundManager.resume();
-      this.pauseBtn.setText('⏸');
-      this._hidePauseOverlay();
-    }
-  }
-
-  _showPauseOverlay() {
-    if (this._pauseOverlay) return;
-    const { W, H } = this;
-    this._pauseOverlay = this.add.container(0, 0).setDepth(100).setScrollFactor(0);
-    const bg  = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.7);
-    const txt = this.add.text(W / 2, H / 2 - 30, 'PAUSED', {
-      fontFamily: '"Arial Black", Impact, sans-serif',
-      fontSize: `${this._fs(0.11, 52)}px`, color: '#ffffff'
-    }).setOrigin(0.5);
-    const sub = this.add.text(W / 2, H / 2 + 30, 'Tap ▶️ to continue', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: `${this._fs(0.042, 18)}px`, color: '#aaaacc'
-    }).setOrigin(0.5);
-    this._pauseOverlay.add([bg, txt, sub]);
-  }
-
-  _hidePauseOverlay() {
-    if (this._pauseOverlay) { this._pauseOverlay.destroy(); this._pauseOverlay = null; }
-  }
+  // Pause/resume handled entirely by YouTube Playables SDK
 
   // ── SCORING & GAME FLOW ───────────────────────────────────────────────────
   _onScore() {
@@ -905,7 +1025,7 @@ export class GameScene extends Phaser.Scene {
   _onMiss() {
     if (this.shieldActive) {
       this.shieldActive = false; this.shieldTimer = 0;
-      soundManager.playHit();
+      // soundManager.playHit();
       this._scoreTextPop(this.ballX, this.ballY - 30, '🛡️ BLOCKED!', '#4895ef');
       this._burst(this.ballX, this.ballY, 0x4895ef, 10);
       this.time.delayedCall(200, () => { if (!this.isGameOver) this._resetBall(); });
@@ -924,13 +1044,13 @@ export class GameScene extends Phaser.Scene {
   _onHitObstacle() {
     if (this.shieldActive) {
       this.shieldActive = false; this.shieldTimer = 0;
-      soundManager.playHit();
+      // soundManager.playHit();
       this._scoreTextPop(this.ballX, this.ballY - 30, '🛡️ BLOCKED!', '#4895ef');
       this._burst(this.ballX, this.ballY, 0x4895ef, 8);
       this.ballVX *= -0.5; this.ballVY *= -0.5;
       return;
     }
-    soundManager.playHit();
+    // soundManager.playHit();
     this._burst(this.ballX, this.ballY, 0xff0000, 8);
     this.cameras.main.shake(150, 0.015);
     this.combo = 0; this.comboTimer = 0;
@@ -973,36 +1093,35 @@ export class GameScene extends Phaser.Scene {
     const tb    = this.targetBasket;
     const zone  = tb.scoreZone;
     const rimY  = zone.y;
-    const halfW = zone.halfW * 1.1; // generous scoring window
+    const halfW = zone.halfW * 1.1;
 
-    // Rim dandi positions (left end cap and right end cap)
     const hs      = this.hoopScale;
     const rimR    = RIM_RADIUS * hs;
     const leftCap  = { x: tb.x - rimR, y: rimY };
     const rightCap = { x: tb.x + rimR, y: rimY };
     const ballR    = 22 * this.ballScale;
-    const capR     = 8 * hs; // dandi radius for collision
+    const capR     = 5 * hs; // tighter — only fires when ball truly touches rim tube
 
-    // Check dandi collisions first (bounce off rim)
-    if (this.ballVY > -100) { // only when ball is falling or nearly level
+    // Dandi collision — gated by cooldown so it only fires ONCE per contact
+    if (this.ballVY > -100) {
       [leftCap, rightCap].forEach(cap => {
         const dx = this.ballX - cap.x;
         const dy = this.ballY - cap.y;
         const d  = Math.hypot(dx, dy);
         if (d < ballR + capR) {
-          // Bounce: reflect velocity component along collision normal
           const nx = dx / (d || 1);
           const ny = dy / (d || 1);
           const dot = this.ballVX * nx + this.ballVY * ny;
           this.ballVX = (this.ballVX - 2 * dot * nx) * 0.55;
           this.ballVY = (this.ballVY - 2 * dot * ny) * 0.55;
-          // Separate ball from dandi
           this.ballX = cap.x + nx * (ballR + capR + 1);
           this.ballY = cap.y + ny * (ballR + capR + 1);
-          // Give net a jolt at impact
           this._impulseNet(tb, this.ballX, this.ballY, 120);
-          soundManager.playHit();
-          // just let it bounce — don't force instant miss
+          // Only play sound once per rim contact (cooldown = 180ms)
+          const now = Date.now();
+        
+            soundManager.playBounce();
+        
         }
       });
     }
@@ -1140,7 +1259,7 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: this.ball, y: cur.y - 20, scaleX: this.ballScale * 1.1, scaleY: this.ballScale * 0.9, duration: 80, yoyo: true, ease: 'Power2', onComplete: () => {
           if (!this.isGameOver) this._resetBall();
         }});
-        soundManager.playHit();
+        // soundManager.playHit();
         this._scoreTextPop(cur.x, cur.y - 30, '↩ SAFE', '#00f5d4');
         return;
       }

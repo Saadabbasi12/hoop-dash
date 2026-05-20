@@ -1,126 +1,126 @@
 /**
- * AssetGenerator - Creates all game textures via canvas
- * Zero external file dependencies, keeps bundle tiny
- * NOTE: Net is NOT baked into hoop texture — GameScene draws it live with spring physics
+ * AssetGenerator — Premium basketball textures
+ * Ball is designed to sit INSIDE the net opening
+ * Net has realistic white cord appearance
  */
 export function generateAssets(scene) {
-  // ── BALL — realistic basketball ───────────────────────────────────────────
+  // ── BALL — generated fallback (overridden by basketball.png if it loads) ─
   const ballGfx = scene.make.graphics({ x: 0, y: 0, add: false });
-  // Base orange fill
-  ballGfx.fillStyle(0xe85d04, 1);
-  ballGfx.fillCircle(24, 24, 23);
-  // Lighter highlight top-left
-  ballGfx.fillStyle(0xff8c42, 0.55);
-  ballGfx.fillCircle(17, 15, 10);
-  // Darker shading bottom-right
-  ballGfx.fillStyle(0xb34a00, 0.35);
-  ballGfx.fillCircle(31, 32, 10);
-  // Outer edge
-  ballGfx.lineStyle(1.5, 0x7a2d00, 1);
-  ballGfx.strokeCircle(24, 24, 23);
-  // Black seam lines — basketball style
-  ballGfx.lineStyle(2, 0x111111, 0.95);
-  // Horizontal equator line
-  ballGfx.lineBetween(1, 24, 47, 24);
-  // Vertical curved seam (center vertical)
-  ballGfx.beginPath();
-  ballGfx.moveTo(24, 1);
-  ballGfx.lineTo(24, 47);
-  ballGfx.strokePath();
-  // Left arc seam
-  ballGfx.lineStyle(2, 0x111111, 0.85);
-  ballGfx.beginPath();
-  ballGfx.arc(24, 24, 13, -Math.PI * 0.55, Math.PI * 0.55);
-  ballGfx.strokePath();
-  // Right arc seam
-  ballGfx.beginPath();
-  ballGfx.arc(24, 24, 13, Math.PI - Math.PI * 0.55, Math.PI + Math.PI * 0.55);
-  ballGfx.strokePath();
-  ballGfx.generateTexture('ball', 48, 48);
+  const R = 24, CX = 26, CY = 26;
+  ballGfx.fillStyle(0xcc4800, 1); ballGfx.fillCircle(CX, CY, R);
+  ballGfx.fillStyle(0xe8621a, 1); ballGfx.fillCircle(CX - 1, CY - 1, R - 1);
+  ballGfx.fillStyle(0xff9a50, 0.7); ballGfx.fillCircle(CX - 8, CY - 9, 12);
+  ballGfx.fillStyle(0xffcca0, 0.5); ballGfx.fillCircle(CX - 11, CY - 13, 5);
+  ballGfx.fillStyle(0x8a2c00, 0.5); ballGfx.fillCircle(CX + 9, CY + 10, 13);
+  ballGfx.lineStyle(3, 0x7a2000, 0.85); ballGfx.strokeCircle(CX, CY, R);
+  ballGfx.lineStyle(2.5, 0x0d0d0d, 1);
+  ballGfx.lineBetween(2, CY, 50, CY); ballGfx.lineBetween(CX, 2, CX, 50);
+  ballGfx.lineStyle(2, 0x0d0d0d, 0.9);
+  ballGfx.beginPath(); ballGfx.arc(CX, CY, 14, -Math.PI * 0.65, Math.PI * 0.65); ballGfx.strokePath();
+  ballGfx.beginPath(); ballGfx.arc(CX, CY, 14, Math.PI - Math.PI * 0.65, Math.PI + Math.PI * 0.65); ballGfx.strokePath();
+  ballGfx.generateTexture('ball', 52, 52);
   ballGfx.destroy();
 
-  // ── HOOP RIM ONLY — net drawn live in GameScene ───────────────────────────
-  // Texture is just the rim arc. Height 22px to encompass just the rim.
+  // ── HOOP RIM — realistic round basketball rim (front view ellipse) ────────
+  // Width=100, Height=40 — ellipse gives 3D perspective look
   const hoopGfx = scene.make.graphics({ x: 0, y: 0, add: false });
+
+  // Center of ellipse
+  const HX = 50, HY = 22, RX = 43, RY = 13;
+
   // Outer glow
-  hoopGfx.lineStyle(8, 0xff4500, 0.28);
-  hoopGfx.beginPath(); hoopGfx.arc(50, 16, 46, 0, Math.PI); hoopGfx.strokePath();
-  // Main rim
-  hoopGfx.lineStyle(6, 0xe85d04, 1);
-  hoopGfx.beginPath(); hoopGfx.arc(50, 16, 44, 0, Math.PI); hoopGfx.strokePath();
-  // Highlight
-  hoopGfx.lineStyle(2, 0xffa055, 0.85);
-  hoopGfx.beginPath(); hoopGfx.arc(50, 14, 44, Math.PI + 0.08, Math.PI * 2 - 0.08); hoopGfx.strokePath();
-  // End caps (dandi tips)
-  hoopGfx.fillStyle(0xd05000, 1);
-  hoopGfx.fillCircle(6, 16, 5.5);
-  hoopGfx.fillCircle(94, 16, 5.5);
-  hoopGfx.fillStyle(0xff8844, 0.7);
-  hoopGfx.fillCircle(6, 14, 3);
-  hoopGfx.fillCircle(94, 14, 3);
-  hoopGfx.generateTexture('hoop', 100, 32);
+  hoopGfx.lineStyle(11, 0xcc3300, 0.18);
+  hoopGfx.strokeEllipse(HX, HY, (RX + 2) * 2, (RY + 2) * 2);
+
+  // Dark outer ring (depth)
+  hoopGfx.lineStyle(8, 0x9e2d00, 1);
+  hoopGfx.strokeEllipse(HX, HY, RX * 2, RY * 2);
+
+  // Main orange rim
+  hoopGfx.lineStyle(5, 0xe85d04, 1);
+  hoopGfx.strokeEllipse(HX, HY, RX * 2, RY * 2);
+
+  // Top highlight arc (upper half only — sheen)
+  hoopGfx.lineStyle(2, 0xff9955, 0.75);
+  hoopGfx.beginPath();
+  hoopGfx.arc(HX, HY, RX, Math.PI + 0.15, Math.PI * 2 - 0.15);
+  hoopGfx.strokePath();
+
+  // Inner rim edge (gives tube thickness)
+  hoopGfx.lineStyle(2, 0xc04400, 0.5);
+  hoopGfx.strokeEllipse(HX, HY + 3, (RX - 4) * 2, (RY - 3) * 2);
+
+  // Backboard bracket (center top — small subtle tab)
+  hoopGfx.fillStyle(0x666666, 0.55);
+  hoopGfx.fillRect(44, 0, 12, 6);
+  hoopGfx.lineStyle(1, 0x999999, 0.4);
+  hoopGfx.strokeRect(44, 0, 12, 6);
+
+  hoopGfx.generateTexture('hoop', 100, 40);
   hoopGfx.destroy();
 
-  // ── PARTICLE ──────────────────────────────────────────────────────────────
+  // ── BACKBOARD ─────────────────────────────────────────────────────────────
+  const bbGfx = scene.make.graphics({ x: 0, y: 0, add: false });
+  bbGfx.fillStyle(0xffffff, 0.06);
+  bbGfx.fillRect(0, 0, 160, 100);
+  bbGfx.lineStyle(3, 0xff6b35, 0.3);
+  bbGfx.strokeRect(0, 0, 160, 100);
+  // Inner box target
+  bbGfx.lineStyle(2, 0xff6b35, 0.45);
+  bbGfx.strokeRect(52, 32, 56, 38);
+  bbGfx.generateTexture('backboard', 160, 100);
+  bbGfx.destroy();
+
+  // ── PARTICLE — premium flare ──────────────────────────────────────────────
   const partGfx = scene.make.graphics({ x: 0, y: 0, add: false });
-  partGfx.fillStyle(0xffcc00, 1);
-  partGfx.fillCircle(6, 6, 6);
-  partGfx.generateTexture('particle', 12, 12);
+  // Radial gradient circle
+  partGfx.fillStyle(0xffffff, 1); partGfx.fillCircle(8, 8, 8);
+  partGfx.fillStyle(0xffdd88, 0.6); partGfx.fillCircle(8, 8, 6);
+  partGfx.fillStyle(0xff9900, 0.4); partGfx.fillCircle(8, 8, 4);
+  partGfx.generateTexture('particle', 16, 16);
   partGfx.destroy();
 
+  // ── STAR PARTICLE ─────────────────────────────────────────────────────────
   const starGfx = scene.make.graphics({ x: 0, y: 0, add: false });
   starGfx.fillStyle(0xffd700, 1);
-  const starPts = [];
+  const spts = [];
   for (let i = 0; i < 10; i++) {
-    const angle = (i / 10) * Math.PI * 2 - Math.PI / 2;
-    const r = i % 2 === 0 ? 8 : 4;
-    starPts.push({ x: 8 + Math.cos(angle) * r, y: 8 + Math.sin(angle) * r });
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 === 0 ? 9 : 4;
+    spts.push({ x: 9 + Math.cos(a) * r, y: 9 + Math.sin(a) * r });
   }
-  starGfx.fillPoints(starPts, true);
-  starGfx.generateTexture('star', 16, 16);
+  starGfx.fillPoints(spts, true);
+  starGfx.generateTexture('star', 18, 18);
   starGfx.destroy();
 
   // ── OBSTACLES ─────────────────────────────────────────────────────────────
   const bladeGfx = scene.make.graphics({ x: 0, y: 0, add: false });
-  bladeGfx.fillStyle(0x888888, 1);
+  bladeGfx.fillStyle(0xcccccc, 1);
   for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2;
-    const cx = 20 + Math.cos(angle) * 10;
-    const cy = 20 + Math.sin(angle) * 10;
+    const a = (i / 4) * Math.PI * 2;
+    const cx = 20 + Math.cos(a) * 10, cy = 20 + Math.sin(a) * 10;
     bladeGfx.fillTriangle(20, 20,
-      cx + Math.cos(angle + 1.2) * 16, cy + Math.sin(angle + 1.2) * 16,
-      cx + Math.cos(angle - 1.2) * 16, cy + Math.sin(angle - 1.2) * 16);
+      cx + Math.cos(a + 1.2) * 17, cy + Math.sin(a + 1.2) * 17,
+      cx + Math.cos(a - 1.2) * 17, cy + Math.sin(a - 1.2) * 17);
   }
-  bladeGfx.fillStyle(0xaaaaaa, 1); bladeGfx.fillCircle(20, 20, 6);
-  bladeGfx.lineStyle(1, 0x555555, 1); bladeGfx.strokeCircle(20, 20, 6);
+  bladeGfx.fillStyle(0xeeeeee, 1); bladeGfx.fillCircle(20, 20, 6);
+  bladeGfx.lineStyle(1, 0x666666, 1); bladeGfx.strokeCircle(20, 20, 6);
   bladeGfx.generateTexture('blade', 40, 40);
   bladeGfx.destroy();
 
-  const wallGfx = scene.make.graphics({ x: 0, y: 0, add: false });
-  wallGfx.fillStyle(0x4a4a6a, 1); wallGfx.fillRect(0, 0, 30, 80);
-  wallGfx.lineStyle(2, 0x6a6a9a, 1); wallGfx.strokeRect(0, 0, 30, 80);
-  for (let y2 = 0; y2 < 80; y2 += 20) { wallGfx.lineStyle(1, 0x3a3a5a, 0.8); wallGfx.lineBetween(0, y2, 30, y2); }
-  wallGfx.generateTexture('wall', 30, 80);
-  wallGfx.destroy();
-
   const bumperGfx = scene.make.graphics({ x: 0, y: 0, add: false });
-  bumperGfx.fillStyle(0xd62828, 1); bumperGfx.fillRect(0, 0, 80, 20);
-  bumperGfx.fillStyle(0xf77f00, 0.5); bumperGfx.fillRect(4, 4, 72, 12);
+  bumperGfx.fillStyle(0xcc2222, 1); bumperGfx.fillRect(0, 0, 80, 20);
+  bumperGfx.fillStyle(0xff6666, 0.5); bumperGfx.fillRect(4, 3, 72, 7);
   bumperGfx.lineStyle(2, 0xff4444, 1); bumperGfx.strokeRect(0, 0, 80, 20);
   bumperGfx.generateTexture('bumper', 80, 20);
   bumperGfx.destroy();
 
-  // ── BACKGROUND ELEMENTS ───────────────────────────────────────────────────
-  const trailGfx = scene.make.graphics({ x: 0, y: 0, add: false });
-  trailGfx.fillStyle(0xffffff, 0.8); trailGfx.fillCircle(4, 4, 4);
-  trailGfx.generateTexture('trail', 8, 8);
-  trailGfx.destroy();
-
+  // ── POWERUP TEXTURES ──────────────────────────────────────────────────────
   const gemGfx = scene.make.graphics({ x: 0, y: 0, add: false });
   gemGfx.fillStyle(0x00f5d4, 1);
   gemGfx.fillPoints([{ x: 12, y: 0 }, { x: 24, y: 10 }, { x: 12, y: 24 }, { x: 0, y: 10 }], true);
   gemGfx.fillStyle(0x80ffe8, 0.7);
-  gemGfx.fillPoints([{ x: 12, y: 2 }, { x: 20, y: 10 }, { x: 12, y: 4 }], true);
+  gemGfx.fillPoints([{ x: 12, y: 2 }, { x: 20, y: 10 }, { x: 12, y: 5 }], true);
   gemGfx.generateTexture('gem', 24, 24);
   gemGfx.destroy();
 
@@ -141,10 +141,15 @@ export function generateAssets(scene) {
   slowGfx.destroy();
 
   const arrowGfx = scene.make.graphics({ x: 0, y: 0, add: false });
-  arrowGfx.fillStyle(0xffff00, 0.9);
-  arrowGfx.fillPoints([{ x: 16, y: 0 }, { x: 32, y: 28 }, { x: 0, y: 28 }], true);
-  arrowGfx.lineStyle(2, 0xffa500, 1);
-  arrowGfx.strokePoints([{ x: 16, y: 0 }, { x: 32, y: 28 }, { x: 0, y: 28 }], true);
+  arrowGfx.fillStyle(0xffffff, 0.85);
+  arrowGfx.fillPoints([{ x: 16, y: 0 }, { x: 30, y: 26 }, { x: 2, y: 26 }], true);
+  arrowGfx.lineStyle(1.5, 0xff9900, 0.9);
+  arrowGfx.strokePoints([{ x: 16, y: 0 }, { x: 30, y: 26 }, { x: 2, y: 26 }], true);
   arrowGfx.generateTexture('arrow', 32, 28);
   arrowGfx.destroy();
+
+  const trailGfx = scene.make.graphics({ x: 0, y: 0, add: false });
+  trailGfx.fillStyle(0xffffff, 0.9); trailGfx.fillCircle(4, 4, 4);
+  trailGfx.generateTexture('trail', 8, 8);
+  trailGfx.destroy();
 }
