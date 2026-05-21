@@ -764,38 +764,34 @@ export class GameScene extends Phaser.Scene {
     hudBorder.lineBetween(0, totalBarH, W, totalBarH);
 
     // ── SCORE PILL — dark glass, centered ─────────────────────────────────
-    const scorePillW = Math.min(W * 0.26, 105);
-    const scorePillH = barH * 0.78;
-    const scorePillY = (totalBarH - scorePillH) / 2;
-    const scorePillCY = scorePillY + scorePillH / 2;   // vertical centre of pill
-    const scorePillR = scorePillH / 2;
+    const scorePillW  = Math.min(W * 0.34, 140);
+    const scorePillH  = totalBarH * 0.80;               // uses full bar height so content fits
+    const scorePillY  = (totalBarH - scorePillH) / 2;
+    const scorePillCY = scorePillY + scorePillH / 2;
+    const scorePillR  = scorePillH / 2;
 
     const scorePillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0);
     scorePillG.fillStyle(0x060809, 0.95);
     scorePillG.fillRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
-    scorePillG.lineStyle(1.5, 0xff6b35, 0.65);
+    scorePillG.lineStyle(1.5, 0x40485a, 1);             // wall colour — cool grey-blue brick highlight
     scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
-    // top glass sheen
-    scorePillG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.08, 0.08, 0, 0);
-    scorePillG.fillRoundedRect(W / 2 - scorePillW / 2 + 3, scorePillY + 2, scorePillW - 6, scorePillH * 0.38, scorePillR);
 
-    // ── SCORE LABEL — tiny, sits above number inside pill ─────────────────
+    // ── SCORE LABEL — tiny, anchored to centre top ────────────────────────
     const labelSize = Math.max(Math.min(S * 0.020, 8), 7);
-    this.add.text(W / 2, scorePillCY - scorePillH * 0.20, 'SCORE', {
+    this.add.text(W / 2, scorePillY + 4, 'SCORE', {
       fontFamily: '"Courier New", monospace',
       fontSize: `${labelSize}px`,
-      color: '#ff6b35',
+      color: '#dbedf1',                                  // wall brick highlight colour
       letterSpacing: 3,
-    }).setOrigin(0.5, 1).setDepth(D).setScrollFactor(0).setAlpha(0.75);
+    }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
 
-    // ── SCORE NUMBER — sits below label inside pill ────────────────────────
-    const numSize = Math.min(fs(0.060, 24), scorePillH * 0.52);
-    this.scoreText = this.add.text(W / 2, scorePillCY + scorePillH * 0.08, '0', {
+    // ── SCORE NUMBER — centred inside pill, wall colour, no shadow bleed ──
+    const numSize = Math.min(fs(0.042, 16), scorePillH * 0.40);
+    this.scoreText = this.add.text(W / 2, scorePillCY + 3, '0', {
       fontFamily: '"Arial Black", Impact, sans-serif',
       fontSize: `${numSize}px`,
-      color: '#ffffff',
-      shadow: { color: '#ff6b35', blur: 12, offsetX: 0, offsetY: 0, fill: true }
-    }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
+      color: '#dbedf1',                                  // wall colour
+    }).setOrigin(0.5, 0.5).setDepth(D).setScrollFactor(0);
 
     // ── LIVES — 3 glass heart capsules, left side ─────────────────────────
     const hSize   = Math.min(totalBarH * 0.52, 22);   // heart bounding box
