@@ -3,6 +3,7 @@ import { YTPlayables } from '../utils/YTPlayables.js';
 import { generateAssets } from '../utils/AssetGenerator.js';
 import { soundManager } from '../utils/SoundManager.js';
 import hoopdashUrl from '../assets/hoopdash.png';
+import basketballUrl from '../assets/basketball.png';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super({ key: 'BootScene' }); }
@@ -10,7 +11,7 @@ export class BootScene extends Phaser.Scene {
   preload() {
     YTPlayables.firstFrameReady();
 
-    this.load.image('basketball_png', 'src/assets/basketball.png');
+    this.load.image('basketball_png', basketballUrl);
     this.load.on('filecomplete-image-basketball_png', () => { this._usePng = true; });
     this.load.on('filefailed-image-basketball_png',  () => { this._usePng = false; });
 
