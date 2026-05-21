@@ -101,13 +101,91 @@ export class GameScene extends Phaser.Scene {
     this.H = gameSize.height;
   }
 
-  // ── BACKGROUND ────────────────────────────────────────────────────────────
+  // ── BACKGROUND — Premium brick walls + dark court floor ─────────────────
   _buildBackground() {
     const { W, H } = this;
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 1);
+
+    // ── COURT FLOOR — pure deep navy, no gradient bleed ─────────────────────
+    const bg = this.add.graphics().setDepth(-10);
+    bg.fillStyle(0x050a14, 1);
     bg.fillRect(0, 0, W, H);
-    bg.setDepth(-10);
+
+    // ── BRICK WALLS ───────────────────────────────────────────────────────────
+    const wallW = Math.round(W * 0.082);
+    this._drawBrickWall(bg, 0,          0, wallW, H, false);
+    this._drawBrickWall(bg, W - wallW,  0, wallW, H, true);
+
+    // ── CLEAN HARD SHADOW — just a 1px dark line, no bleed into court ────────
+    bg.lineStyle(1, 0x000000, 1);
+    bg.lineBetween(wallW,     0, wallW,     H);
+    bg.lineBetween(W - wallW, 0, W - wallW, H);
+
+    // Store wall boundaries for ball bounce
+    this.leftWallX  = wallW;
+    this.rightWallX = W - wallW;
+  }
+
+  /**
+   * Draw a tiled brick wall — cool dark grey-blue palette, crisp mortar.
+   */
+  _drawBrickWall(g, x, y, w, h, flipOffset = false) {
+    // Each brick is 2 bricks wide per row, so half-width per brick
+    const bW   = Math.round(w * 0.6);   // single brick width (wider than wall for offset effect)
+    const bH   = Math.round(w * 0.36);  // brick height
+    const rows = Math.ceil(h / bH) + 2;
+
+    // ── WALL BASE — very dark cool grey-blue, NOT brown ──────────────────────
+    g.fillStyle(0x0c0e12, 1);
+    g.fillRect(x, y, w, h);
+
+    for (let r = 0; r < rows; r++) {
+      const bY      = y + r * bH;
+      // Alternate row offset — bricks interlock
+      const offX    = (r % 2 === (flipOffset ? 0 : 1)) ? Math.round(bW * 0.5) : 0;
+
+      // Brick colour: cool dark charcoal, subtle variation per row (NO warm/orange tones)
+      const v       = 42 + ((r * 6 + (flipOffset ? 2 : 0)) % 18);  // 42..60 — brighter
+      const brickR  = v;
+      const brickG  = v + 3;
+      const brickB  = v + 7;
+      const brickCol = (brickR << 16) | (brickG << 8) | brickB;
+
+      // Draw bricks — starting before x to allow offset
+      for (let bx = x - bW + offX; bx < x + w; bx += bW) {
+        const bLeft  = Math.max(bx,      x);
+        const bRight = Math.min(bx + bW - 2, x + w - 1);
+        if (bRight <= bLeft) continue;
+        const bw = bRight - bLeft;
+
+        // Brick face
+        g.fillStyle(brickCol, 1);
+        g.fillRect(bLeft, bY + 1, bw, bH - 2);
+
+        g.lineStyle(1, 0x606878, 1);
+        g.lineBetween(bLeft, bY + 1, bLeft + bw - 1, bY + 1);
+
+        g.lineStyle(1, 0x0a0c14, 1);
+        g.lineBetween(bLeft, bY + bH - 2, bLeft + bw - 1, bY + bH - 2);
+
+        g.lineStyle(1, 0x181c24, 0.9);
+        g.lineBetween(bLeft, bY + 1, bLeft, bY + bH - 2);
+      }
+
+      // Horizontal mortar line — very dark
+      g.lineStyle(1, 0x040608, 1);
+      g.lineBetween(x, bY, x + w, bY);
+    }
+
+    // Subtle inner-edge shadow: right side of left wall darkens toward edge
+    if (!flipOffset) {
+      // Left wall: right edge darker (where it meets the court)
+      g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0.55, 0, 0.55);
+      g.fillRect(x + w - 6, y, 6, h);
+    } else {
+      // Right wall: left edge darker
+      g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.55, 0, 0.55, 0);
+      g.fillRect(x, y, 6, h);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -659,51 +737,89 @@ export class GameScene extends Phaser.Scene {
     const S  = Math.min(W, H);
     const fs = this._fs.bind(this);
 
-    // ── TOP BAR — glass pill HUD ──────────────────────────────────────────
-    const barH    = Math.min(H * 0.065, 50);
-    const barY    = barH * 0.52 + 4;
-    const barPad  = 6;
+    // ══════════════════════════════════════════════════════════════════════
+    //  PREMIUM TOP HUD
+    // ══════════════════════════════════════════════════════════════════════
+    const barH      = Math.min(H * 0.072, 52);
+    const totalBarH = barH + 10;
+    const barPad    = 5;
 
-    // Full-width frosted top bar
-    const topBarG = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
-    topBarG.fillStyle(0x000000, 0.55);
-    topBarG.fillRect(0, 0, W, barH + barPad * 2);
-    // Bottom border line
-    topBarG.lineStyle(1, 0xff6b35, 0.25);
-    topBarG.lineBetween(0, barH + barPad * 2, W, barH + barPad * 2);
-    // Top shine
-    topBarG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.04, 0.04, 0, 0);
-    topBarG.fillRect(0, 0, W, 2);
+    // ── Layer 1: base — same cool dark tone as brick walls ────────────────
+    const hudBase = this.add.graphics().setDepth(D - 3).setScrollFactor(0);
+    hudBase.fillStyle(0x0c0e12, 1);           // matches brick wall base colour
+    hudBase.fillRect(0, 0, W, totalBarH);
 
-    // ── SCORE — center pill ────────────────────────────────────────────────
-    const scorePillW = Math.min(W * 0.3, 120);
+    // ── Layer 2: very subtle inner gradient — top slightly lighter ─────────
+    const hudShine = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
+    hudShine.fillGradientStyle(0x20252e, 0x20252e, 0x0c0e12, 0x0c0e12, 1, 1, 0, 0);
+    hudShine.fillRect(0, 0, W, totalBarH);
+
+    // ── Layer 3: bottom border — matches brick wall cool grey-blue ────────
+    const hudBorder = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
+    // Subtle dim glow
+    hudBorder.lineStyle(3, 0x2a3040, 0.6);
+    hudBorder.lineBetween(0, totalBarH + 1, W, totalBarH + 1);
+    // Crisp 1px line — same cool charcoal as brick top highlights
+    hudBorder.lineStyle(1, 0x40485a, 1);
+    hudBorder.lineBetween(0, totalBarH, W, totalBarH);
+
+    // ── SCORE PILL — dark glass, centered ─────────────────────────────────
+    const scorePillW = Math.min(W * 0.26, 105);
+    const scorePillH = barH * 0.78;
+    const scorePillY = (totalBarH - scorePillH) / 2;
+    const scorePillCY = scorePillY + scorePillH / 2;   // vertical centre of pill
+    const scorePillR = scorePillH / 2;
+
     const scorePillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0);
-    scorePillG.fillStyle(0xff6b35, 0.15);
-    scorePillG.fillRoundedRect(W / 2 - scorePillW / 2, barPad, scorePillW, barH, barH / 2);
-    scorePillG.lineStyle(1.5, 0xff6b35, 0.5);
-    scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, barPad, scorePillW, barH, barH / 2);
+    scorePillG.fillStyle(0x060809, 0.95);
+    scorePillG.fillRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
+    scorePillG.lineStyle(1.5, 0xff6b35, 0.65);
+    scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
+    // top glass sheen
+    scorePillG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.08, 0.08, 0, 0);
+    scorePillG.fillRoundedRect(W / 2 - scorePillW / 2 + 3, scorePillY + 2, scorePillW - 6, scorePillH * 0.38, scorePillR);
 
-    this.scoreText = this.add.text(W / 2, barY, '0', {
+    // ── SCORE LABEL — tiny, sits above number inside pill ─────────────────
+    const labelSize = Math.max(Math.min(S * 0.020, 8), 7);
+    this.add.text(W / 2, scorePillCY - scorePillH * 0.20, 'SCORE', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: `${labelSize}px`,
+      color: '#ff6b35',
+      letterSpacing: 3,
+    }).setOrigin(0.5, 1).setDepth(D).setScrollFactor(0).setAlpha(0.75);
+
+    // ── SCORE NUMBER — sits below label inside pill ────────────────────────
+    const numSize = Math.min(fs(0.060, 24), scorePillH * 0.52);
+    this.scoreText = this.add.text(W / 2, scorePillCY + scorePillH * 0.08, '0', {
       fontFamily: '"Arial Black", Impact, sans-serif',
-      fontSize: `${fs(0.07, 30)}px`,
+      fontSize: `${numSize}px`,
       color: '#ffffff',
-      shadow: { color: '#ff6b35', blur: 10, fill: true }
-    }).setOrigin(0.5).setDepth(D).setScrollFactor(0);
+      shadow: { color: '#ff6b35', blur: 12, offsetX: 0, offsetY: 0, fill: true }
+    }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
 
-    // ── LIVES — left side with label ──────────────────────────────────────
-    const livesX = Math.min(W * 0.06, 28);
-    this.livesContainer = this.add.container(livesX, barY).setDepth(D).setScrollFactor(0);
-    this.heartIcons = [];
+    // ── LIVES — 3 glass heart capsules, left side ─────────────────────────
+    const hSize   = Math.min(totalBarH * 0.52, 22);   // heart bounding box
+    const hGap    = hSize * 0.55;
+    const hStartX = Math.max(W * 0.022, 10);
+    const hCY     = totalBarH / 2;
+
+    // Store refs so _refreshHearts can redraw
+    this._livesHSize  = hSize;
+    this._livesHGap   = hGap;
+    this._livesHStartX = hStartX;
+    this._livesHCY    = hCY;
+    this._livesD      = D;
+    this.heartGraphics = [];   // array of {g, active}
+
     this._refreshHearts();
 
     // ── COMBO TEXT ────────────────────────────────────────────────────────
-    this.comboText = this.add.text(W / 2, barH + barPad * 2 + 6, '', {
+    this.comboText = this.add.text(W / 2, totalBarH + 8, '', {
       fontFamily: '"Arial Black", Impact, sans-serif',
       fontSize: `${fs(0.052, 22)}px`,
       color: '#ffd700',
-      stroke: '#cc8800',
-      strokeThickness: 2,
-      shadow: { color: '#ffaa00', blur: 12, fill: true }
+      stroke: '#7a4400', strokeThickness: 3,
+      shadow: { color: '#ffaa00', blur: 18, fill: true }
     }).setOrigin(0.5).setDepth(D).setAlpha(0).setScrollFactor(0);
 
     // ── POWERUP INDICATOR — bottom center glass pill ───────────────────────
@@ -728,25 +844,110 @@ export class GameScene extends Phaser.Scene {
 
     // Pause handled by YouTube — no pause button in game
 
-    // ── SIDE ACCENT LINES ─────────────────────────────────────────────────
-    const sideG = this.add.graphics().setDepth(-7).setScrollFactor(0);
-    sideG.lineStyle(2, 0xff6b35, 0.12);
-    for (let y = 0; y < H; y += 50) {
-      sideG.lineBetween(0, y, W * 0.04, y);
-      sideG.lineBetween(W * 0.96, y, W, y);
+    // Side walls drawn in _buildBackground — no accent lines needed
+  }
+
+  // ── GLASS HEART DRAW HELPER ───────────────────────────────────────────────
+  /**
+   * Draw a single glass-style heart at (cx, cy) with given size.
+   * active = true → glowing red gem heart
+   * active = false → dim grey empty heart
+   */
+  _drawGlassHeart(g, cx, cy, size, active) {
+    const s = size * 0.5;   // half-size — easier maths
+
+    // Heart path: two bezier humps + bottom point
+    // Built from 4 cubic-bezier segments approximated as filled polygon
+    const pts = [];
+    const steps = 32;
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * Math.PI * 2;
+      // Classic heart parametric: x = 16sin³t, y = -(13cos t - 5cos2t - 2cos3t - cos4t)
+      const hx = cx + s * 0.95 * (Math.pow(Math.sin(t), 3));
+      const hy = cy + s * 0.90 * -(
+        0.8125 * Math.cos(t) -
+        0.3125 * Math.cos(2 * t) -
+        0.125  * Math.cos(3 * t) -
+        0.0625 * Math.cos(4 * t)
+      ) + s * 0.08;   // nudge down slightly so heart centres visually
+      pts.push({ x: hx, y: hy });
+    }
+
+    if (active) {
+      // ── Drop shadow ────────────────────────────────────────────────────
+      g.fillStyle(0x000000, 0.45);
+      const shadowPts = pts.map(p => ({ x: p.x + 1.5, y: p.y + 2 }));
+      g.fillPoints(shadowPts, true);
+
+      // ── Main fill — deep ruby red ──────────────────────────────────────
+      g.fillStyle(0xc0112a, 1);
+      g.fillPoints(pts, true);
+
+      // ── Mid tone — gives it volume ─────────────────────────────────────
+      g.fillStyle(0xe8193a, 1);
+      const midPts = pts.map(p => ({ x: cx + (p.x - cx) * 0.82, y: cy + (p.y - cy) * 0.82 }));
+      g.fillPoints(midPts, true);
+
+      // ── Bright inner core ──────────────────────────────────────────────
+      g.fillStyle(0xff3355, 1);
+      const corePts = pts.map(p => ({ x: cx + (p.x - cx) * 0.55, y: cy + (p.y - cy) * 0.55 }));
+      g.fillPoints(corePts, true);
+
+      // ── Glass shine — top-left oval highlight ──────────────────────────
+      g.fillStyle(0xffffff, 0.70);
+      g.fillEllipse(cx - s * 0.22, cy - s * 0.28, s * 0.50, s * 0.28);
+
+      // ── Tiny specular dot ──────────────────────────────────────────────
+      g.fillStyle(0xffffff, 0.95);
+      g.fillCircle(cx - s * 0.28, cy - s * 0.32, s * 0.10);
+
+      // ── Outer rim glow (simulated with semi-transparent stroke) ────────
+      g.lineStyle(1.5, 0xff6688, 0.55);
+      g.strokePoints(pts, true);
+
+    } else {
+      // ── Empty heart — dim cool grey outline only ───────────────────────
+      g.fillStyle(0x1e2430, 1);
+      g.fillPoints(pts, true);
+
+      g.fillStyle(0x141820, 1);
+      const innerPts = pts.map(p => ({ x: cx + (p.x - cx) * 0.72, y: cy + (p.y - cy) * 0.72 }));
+      g.fillPoints(innerPts, true);
+
+      g.lineStyle(1, 0x2e3848, 0.85);
+      g.strokePoints(pts, true);
+
+      // Tiny dim sheen so it doesn't look totally flat
+      g.fillStyle(0xffffff, 0.08);
+      g.fillEllipse(cx - s * 0.18, cy - s * 0.26, s * 0.42, s * 0.22);
     }
   }
 
   _refreshHearts() {
-    this.heartIcons.forEach(h => h.destroy());
+    // Destroy old heart graphics
+    if (this.heartGraphics) {
+      this.heartGraphics.forEach(g => g.destroy());
+    }
+    this.heartGraphics = [];
+
+    // Also destroy old emoji container if it exists
+    if (this.livesContainer) {
+      this.livesContainer.destroy();
+      this.livesContainer = null;
+    }
     this.heartIcons = [];
-    this.livesContainer.removeAll(true);
-    const heartSize = this._fs(0.048, 20);
-    const spacing   = heartSize * 1.3;
+
+    const hSize  = this._livesHSize  ?? 22;
+    const hGap   = this._livesHGap   ?? 12;
+    const startX = this._livesHStartX ?? 10;
+    const hCY    = this._livesHCY    ?? 30;
+    const D      = this._livesD      ?? 50;
+
     for (let i = 0; i < 3; i++) {
-      const h = this.add.text(i * spacing, 0, i < this.lives ? '❤️' : '🖤', { fontSize: `${heartSize}px` }).setOrigin(0, 0.5);
-      this.livesContainer.add(h);
-      this.heartIcons.push(h);
+      const cx = startX + hSize / 2 + i * (hSize + hGap);
+      const g  = this.add.graphics().setDepth(D).setScrollFactor(0);
+      this._drawGlassHeart(g, cx, hCY, hSize, i < this.lives);
+      this.heartGraphics.push(g);
     }
   }
 
@@ -1223,10 +1424,20 @@ export class GameScene extends Phaser.Scene {
         this.ballVY = Math.abs(this.ballVY) * 0.65;
       }
 
-      // Wall bounce
+      // Wall bounce — off brick walls, with brick-impact flash
       const r = 24 * this.ballScale;
-      if (this.ballX - r < 0)      { this.ballX = r;          this.ballVX =  Math.abs(this.ballVX) * 0.7; }
-      if (this.ballX + r > this.W) { this.ballX = this.W - r; this.ballVX = -Math.abs(this.ballVX) * 0.7; }
+      const leftWall  = (this.leftWallX  ?? 0)      + r;
+      const rightWall = (this.rightWallX ?? this.W) - r;
+      if (this.ballX < leftWall) {
+        this.ballX  = leftWall;
+        this.ballVX = Math.abs(this.ballVX) * 0.72;
+        this._wallImpactFlash('left');
+      }
+      if (this.ballX > rightWall) {
+        this.ballX  = rightWall;
+        this.ballVX = -Math.abs(this.ballVX) * 0.72;
+        this._wallImpactFlash('right');
+      }
 
       // Miss if ball falls way below
       if (this.ballY > this.currentBasket.y + this.H * 0.35) {
@@ -1258,6 +1469,31 @@ export class GameScene extends Phaser.Scene {
     } else if (!this.ballInsideNet) {
       // Ball resting or waiting — just update aim arrow
       this._updateAimArrow();
+    }
+  }
+
+  _wallImpactFlash(side) {
+    soundManager.playBounce();
+    const flashX = side === 'left' ? this.leftWallX + 4 : this.rightWallX - 4;
+    const flashY = this.ballY;
+
+    // Brick-dust particles only — no wall glow
+    for (let i = 0; i < 5; i++) {
+      const angle = side === 'left'
+        ? Phaser.Math.FloatBetween(-Math.PI * 0.5, Math.PI * 0.5)
+        : Phaser.Math.FloatBetween(Math.PI * 0.5, Math.PI * 1.5);
+      const spd = Phaser.Math.FloatBetween(25, 70);
+      // Cool grey-blue dust — matches brick colour
+      const col = Phaser.Math.Between(0, 1) === 0 ? 0x40485a : 0x20252e;
+      const p   = this.add.circle(flashX, flashY, Phaser.Math.FloatBetween(2, 4), col, 1).setDepth(18);
+      this.tweens.add({
+        targets: p,
+        x: flashX + Math.cos(angle) * spd,
+        y: flashY + Math.sin(angle) * spd + 12,
+        alpha: 0, scaleX: 0.1, scaleY: 0.1,
+        duration: Phaser.Math.Between(200, 380), ease: 'Power2',
+        onComplete: () => p.destroy()
+      });
     }
   }
 
