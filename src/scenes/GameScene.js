@@ -79,6 +79,7 @@ export class GameScene extends Phaser.Scene {
     // Net front layer (rows 3+) — in front of ball (depth 8) for "ball inside net" look
     this.netFrontGraphics = this.add.graphics().setDepth(8);
 
+
     this._initBaskets();
     this._initBall();
     this._createUI();
@@ -103,57 +104,10 @@ export class GameScene extends Phaser.Scene {
   // ── BACKGROUND ────────────────────────────────────────────────────────────
   _buildBackground() {
     const { W, H } = this;
-    const S = Math.min(W, H);
-
-    // Deep navy base
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x020509, 0x020509, 0x08101e, 0x08101e, 1);
+    bg.fillStyle(0x000000, 1);
     bg.fillRect(0, 0, W, H);
     bg.setDepth(-10);
-
-    // No brown floor — full dark arena background
-
-    // Court paint box lines
-    const courtG = this.add.graphics().setDepth(-8);
-    courtG.lineStyle(1.2, 0xd4a017, 0.08);
-    const pbW = S * 0.45, pbH2 = S * 0.28;
-    const courtRefY = H * 0.68;
-    courtG.strokeRect(W / 2 - pbW / 2, courtRefY - pbH2, pbW, pbH2 + (H - courtRefY) * 1.1);
-    courtG.lineStyle(1.2, 0xd4a017, 0.07);
-    courtG.lineBetween(W / 2 - pbW / 2, courtRefY - pbH2, W / 2 + pbW / 2, courtRefY - pbH2);
-    // Center circle
-    courtG.lineStyle(1, 0xd4a017, 0.065);
-    courtG.strokeCircle(W / 2, H * 0.5, S * 0.25);
-    // 3-point arc
-    courtG.lineStyle(1.2, 0xd4a017, 0.075);
-    courtG.beginPath();
-    courtG.arc(W / 2, H * 0.88, S * 0.46, Math.PI + 0.22, -0.22, false);
-    courtG.strokePath();
-
-    // Spotlight from arena ceiling
-    const spotG = this.add.graphics().setDepth(-7);
-    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.035, 0.035, 0, 0);
-    spotG.fillTriangle(W / 2 - S * 0.025, 0, W / 2 + S * 0.025, 0, W / 2 + S * 0.38, H * 0.75, W / 2 - S * 0.38, H * 0.75);
-    spotG.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 0.012, 0.012, 0, 0);
-    spotG.fillTriangle(0, 0, W * 0.08, 0, W * 0.45, H, 0, H);
-    spotG.fillTriangle(W * 0.92, 0, W, 0, W, H, W * 0.55, H);
-
-    // Stars in upper area
-    for (let i = 0; i < 45; i++) {
-      const star = this.add.circle(
-        Phaser.Math.Between(0, W), Phaser.Math.Between(0, H * 0.65),
-        Phaser.Math.FloatBetween(0.4, 1.8), 0xffffff, Phaser.Math.FloatBetween(0.08, 0.45)
-      ).setDepth(-6);
-      this.tweens.add({ targets: star, alpha: 0.03, duration: Phaser.Math.Between(700, 2400), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 2000) });
-    }
-
-    // Side accent bars
-    const accG = this.add.graphics().setDepth(-8);
-    accG.lineStyle(1.5, 0xff6b35, 0.10);
-    for (let y = 0; y < H; y += 50) {
-      accG.lineBetween(0, y, W * 0.04, y);
-      accG.lineBetween(W * 0.96, y, W, y);
-    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -189,13 +143,24 @@ export class GameScene extends Phaser.Scene {
     const net    = basket.net;
     const rows   = NET_ROWS;
     const cols   = NET_COLS;
-    const taper  = r / rows;                                  // 0 top → 1 bottom
+    const taper  = r / rows;                                  // 0 top -> 1 bottom
     const halfW  = (net.rimWidth / 2) * (1 - taper * 0.62);
     const t      = c / cols;
-    const x      = basket.x - halfW + t * halfW * 2;
-    const y      = basket.y + taper * net.netHeight;
+    // Local (untilted) position relative to basket centre
+    const lx     = -halfW + t * halfW * 2;
+    const ly     = taper * net.netHeight;
+
+    // Apply basket tilt: rotate local coords by tiltDeg around origin
+    const rad    = (basket.tiltDeg || 0) * (Math.PI / 180);
+    const cosA   = Math.cos(rad);
+    const sinA   = Math.sin(rad);
+    const rx     = lx * cosA - ly * sinA;
+    const ry     = lx * sinA + ly * cosA;
+
+    const x      = basket.x + rx;
+    const y      = basket.y + ry;
     // Drag pull: top row stays pinned, bottom follows ball fully
-    const drag   = taper * taper; // quadratic — feels more elastic
+    const drag   = taper * taper; // quadratic - feels more elastic
     const shake  = net.shakeAmt * taper * Math.sin(c * 1.1 + r * 0.7);
     return {
       x: x + shake + net.dragOffsetX * drag,
@@ -309,13 +274,13 @@ export class GameScene extends Phaser.Scene {
 
     const curX = W / 2;
     const curY = H * 0.75;
-    this.currentBasket = this._makeBasket(curX, curY, 0x00f5d4);
+    this.currentBasket = this._makeBasket(curX, curY, 0x00f5d4, 0);
 
     // First target: left side, same screen height above current basket
     const gap  = Phaser.Math.Between(BASKET_GAP_MIN, BASKET_GAP_MAX);
     const tgtY = curY - gap;
     const tgtX = this._nextBasketX();
-    this.targetBasket = this._makeBasket(tgtX, tgtY, 0xff6b35);
+    this.targetBasket = this._makeBasket(tgtX, tgtY, 0xff6b35, 0);
 
     this._pulseBasket(this.targetBasket);
   }
@@ -338,16 +303,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  _makeBasket(x, y, rimColor) {
+  _makeBasket(x, y, rimColor, tiltDeg = 0) {
     const img = this.add.image(x, y, 'hoop')
       .setScale(this.hoopScale)
       .setDepth(4);
     img.setTint(rimColor);
+    img.setAngle(tiltDeg);
 
     const basket = {
       img,
       x, y,
       rimColor,
+      tiltDeg,                                                   // degrees, + = right, - = left
       scoreZone: { x, y: y, halfW: SCORE_HALF_W * this.hoopScale },
       net: null
     };
@@ -393,8 +360,24 @@ export class GameScene extends Phaser.Scene {
     const newY = this.currentBasket.y - gap;
     const newX = this._nextBasketX();
 
-    this.targetBasket = this._makeBasket(newX, newY, 0xff6b35);
+    // Tilt: after 3 baskets, tilt the target toward the side it is on
+    // relative to the current basket so the rim faces the incoming ball.
+    // Max tilt grows slowly with difficulty, capped at 18 degrees.
+    let tiltDeg = 0;
+    if (this.totalBaskets >= 3) {
+      const maxTilt = Math.min(6 + Math.floor((this.totalBaskets - 3) / 3) * 2, 18);
+      const dir     = newX > this.currentBasket.x ? 1 : -1;
+      tiltDeg       = dir * Phaser.Math.FloatBetween(maxTilt * 0.5, maxTilt);
+    }
+
+    this.targetBasket = this._makeBasket(newX, newY, 0xff6b35, tiltDeg);
     this._pulseBasket(this.targetBasket);
+
+    // Randomly attach funnel guide-bars after basket 5 (~40% chance)
+    // Moving basket: after basket 5, add horizontal oscillation
+    if (this.totalBaskets >= 5) {
+      this._startBasketMovement(this.targetBasket);
+    }
 
     const headroom = this.H * 0.18;
     if (newY < headroom) {
@@ -981,6 +964,40 @@ export class GameScene extends Phaser.Scene {
     try { await YTPlayables.saveData({ bestScore: this.bestScore, lastScore: this.score }); } catch (e) {}
   }
 
+  // ======================================================================
+  //  MOVING BASKET
+  // ======================================================================
+
+  /**
+   * Start gentle horizontal oscillation on a basket.
+   * Speed and range grow slowly with totalBaskets but stay playable.
+   * baseX is the spawn X — basket oscillates around it.
+   */
+  _startBasketMovement(basket) {
+    const stage        = this.totalBaskets - 5;           // 0 at basket 5
+    const range        = Math.min(18 + Math.floor(stage / 4) * 6, 70);   // px, grows slowly
+    const period       = Math.max(2800 - stage * 80, 1400);               // ms, speeds up slowly
+    basket.moveRange   = range;
+    basket.movePeriod  = period;
+    basket.movePhase   = Math.random() * Math.PI * 2;     // random starting angle
+    basket.baseX       = basket.x;
+    basket.moveTime    = 0;
+  }
+
+  /**
+   * Called every frame — updates basket.x, img.x, scoreZone.x along sine wave.
+   */
+  _stepBasketMovement(basket, dt) {
+    if (!basket || !basket.moveRange) return;
+    basket.moveTime += dt * 1000;
+    const newX = basket.baseX + Math.sin(
+      (basket.moveTime / basket.movePeriod) * Math.PI * 2 + basket.movePhase
+    ) * basket.moveRange;
+    basket.x           = newX;
+    basket.img.x       = newX;
+    basket.scoreZone.x = newX;
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   //  COLLISION CHECKS
   // ══════════════════════════════════════════════════════════════════════════
@@ -997,8 +1014,10 @@ export class GameScene extends Phaser.Scene {
 
     const hs      = this.hoopScale;
     const rimR    = RIM_RADIUS * hs;
-    const leftCap  = { x: tb.x - rimR, y: rimY };
-    const rightCap = { x: tb.x + rimR, y: rimY };
+    // Adjust cap and score-zone positions for basket tilt
+    const tiltRad  = (tb.tiltDeg || 0) * (Math.PI / 180);
+    const leftCap  = { x: tb.x - rimR * Math.cos(tiltRad), y: rimY - rimR * Math.sin(tiltRad) };
+    const rightCap = { x: tb.x + rimR * Math.cos(tiltRad), y: rimY + rimR * Math.sin(tiltRad) };
     const ballR    = 22 * this.ballScale;
     const capR     = 5 * hs; // tighter — only fires when ball truly touches rim tube
 
@@ -1106,6 +1125,9 @@ export class GameScene extends Phaser.Scene {
     // ── Net physics step (both baskets every frame) ─────────────────────────
     this._stepNet(this.currentBasket, dt * slowFactor);
     this._stepNet(this.targetBasket,  dt * slowFactor);
+
+    // ── Moving basket update
+    this._stepBasketMovement(this.targetBasket, dt * slowFactor);
 
     // ── Draw nets ──────────────────────────────────────────────────────────
     this.netGraphics.clear();
