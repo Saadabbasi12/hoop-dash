@@ -198,53 +198,119 @@ export class GameScene extends Phaser.Scene {
    * Rows NET_FRONT_ROW..NET_ROWS drawn on netFrontGraphics (depth 8, in front of ball).
    * This makes the ball look like it's sitting INSIDE the net.
    */
-  _drawNet(basket, tintColor, alpha = 1) {
-    const net  = basket.net;
-    if (!net) return;
-    const rows = NET_ROWS;
-    const cols = NET_COLS;
-    // Rows 0-2 go behind the ball; rows 3+ go in front
-    const splitRow = 2;
+ _drawNet(basket, tintColor, alpha = 1) {
+  const net  = basket.net;
+  if (!net) return;
+  const rows = NET_ROWS;
+  const cols = NET_COLS;
+  const splitRow = 2;
 
-    const drawSegment = (g, fromRow, toRow) => {
-      // Vertical strands
-      for (let c = 0; c <= cols; c++) {
-        for (let r = fromRow; r < toRow; r++) {
-          const n1   = this._netNode(basket, r,     c);
-          const n2   = this._netNode(basket, r + 1, c);
-          const t    = r / rows;
-          const fade = (0.95 - t * 0.50) * alpha;
-          const thick = 2.0 - t * 0.6;
-          g.lineStyle(thick, 0xffffff, fade);
-          g.lineBetween(n1.x, n1.y, n2.x, n2.y);
-        }
-      }
-      // Horizontal rings
-      for (let r = Math.max(fromRow, 1); r <= toRow; r++) {
-        for (let c = 0; c < cols; c++) {
-          const n1   = this._netNode(basket, r, c);
-          const n2   = this._netNode(basket, r, c + 1);
-          const t    = r / rows;
-          const fade = (0.80 - t * 0.45) * alpha;
-          const thick = 1.6 - t * 0.5;
-          g.lineStyle(thick, 0xdddddd, fade);
-          g.lineBetween(n1.x, n1.y, n2.x, n2.y);
-        }
-      }
-    };
+  // ── Derive a bright accent and a dim shadow colour from tintColor ──────
+  // tintColor is a hex number like 0x00e8c0 or 0xff7a20
+  const tr = (tintColor >> 16) & 0xff;
+  const tg = (tintColor >>  8) & 0xff;
+  const tb =  tintColor        & 0xff;
+  // Bright: mix tint 60% with white 40%
+  const br = Math.min(255, tr + 102) & 0xff;
+  const bg = Math.min(255, tg + 102) & 0xff;
+  const bb = Math.min(255, tb + 102) & 0xff;
+  const brightColor = (br << 16) | (bg << 8) | bb;
+  // Shadow: tint × 0.35
+  const sr = Math.round(tr * 0.35) & 0xff;
+  const sg = Math.round(tg * 0.35) & 0xff;
+  const sb = Math.round(tb * 0.35) & 0xff;
+  const shadowColor = (sr << 16) | (sg << 8) | sb;
 
-    // Back half (behind ball)
-    drawSegment(this.netGraphics, 0, splitRow);
-    // Front half (in front of ball)
-    drawSegment(this.netFrontGraphics, splitRow, rows);
+  const drawSegment = (g, fromRow, toRow) => {
 
-    // Rim knot dots at top (behind ball is fine)
+    // ── SHADOW PASS — offset lines give the cord a 3-D rope look ──────────
     for (let c = 0; c <= cols; c++) {
-      const n = this._netNode(basket, 0, c);
-      this.netGraphics.fillStyle(0xffffff, 0.7 * alpha);
-      this.netGraphics.fillCircle(n.x, n.y, 1.5);
+      for (let r = fromRow; r < toRow; r++) {
+        const n1 = this._netNode(basket, r,     c);
+        const n2 = this._netNode(basket, r + 1, c);
+        const t  = r / rows;
+        g.lineStyle(3.2 - t * 0.8, shadowColor, (0.55 - t * 0.28) * alpha);
+        g.lineBetween(n1.x + 1.2, n1.y + 1.2, n2.x + 1.2, n2.y + 1.2);
+      }
     }
+    for (let r = Math.max(fromRow, 1); r <= toRow; r++) {
+      for (let c = 0; c < cols; c++) {
+        const n1 = this._netNode(basket, r, c);
+        const n2 = this._netNode(basket, r, c + 1);
+        const t  = r / rows;
+        g.lineStyle(2.2 - t * 0.5, shadowColor, (0.45 - t * 0.22) * alpha);
+        g.lineBetween(n1.x + 1.0, n1.y + 1.0, n2.x + 1.0, n2.y + 1.0);
+      }
+    }
+
+    // ── MAIN CORD PASS — tinted, fading top-to-bottom ─────────────────────
+    for (let c = 0; c <= cols; c++) {
+      for (let r = fromRow; r < toRow; r++) {
+        const n1    = this._netNode(basket, r,     c);
+        const n2    = this._netNode(basket, r + 1, c);
+        const t     = r / rows;
+        // Vertical strands: start with bright tint at top, fade to dim tint
+        const color = t < 0.35 ? brightColor : tintColor;
+        const fade  = (0.98 - t * 0.55) * alpha;
+        const thick = 2.4 - t * 0.75;
+        g.lineStyle(thick, color, fade);
+        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
+      }
+    }
+
+    // Horizontal rings — slightly dimmer, use tintColor throughout
+    for (let r = Math.max(fromRow, 1); r <= toRow; r++) {
+      for (let c = 0; c < cols; c++) {
+        const n1   = this._netNode(basket, r, c);
+        const n2   = this._netNode(basket, r, c + 1);
+        const t    = r / rows;
+        const fade = (0.75 - t * 0.42) * alpha;
+        const thick = 1.8 - t * 0.55;
+        g.lineStyle(thick, tintColor, fade);
+        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
+      }
+    }
+
+    // ── HIGHLIGHT PASS — thin bright centre line on top vertical strands ──
+    for (let c = 0; c <= cols; c++) {
+      for (let r = fromRow; r < Math.min(toRow, 2); r++) {
+        const n1 = this._netNode(basket, r,     c);
+        const n2 = this._netNode(basket, r + 1, c);
+        g.lineStyle(0.8, 0xffffff, 0.55 * alpha);
+        g.lineBetween(n1.x - 0.5, n1.y, n2.x - 0.5, n2.y);
+      }
+    }
+  };
+
+  // Back half (behind ball)
+  drawSegment(this.netGraphics, 0, splitRow);
+  // Front half (in front of ball)
+  drawSegment(this.netFrontGraphics, splitRow, rows);
+
+  // ── RIM ATTACHMENT KNOTS — glowing dots where net meets the rim ─────────
+  for (let c = 0; c <= cols; c++) {
+    const n = this._netNode(basket, 0, c);
+
+    // Outer glow ring
+    this.netGraphics.fillStyle(tintColor, 0.25 * alpha);
+    this.netGraphics.fillCircle(n.x, n.y, 4.5);
+
+    // Main bright knot
+    this.netGraphics.fillStyle(brightColor, 0.90 * alpha);
+    this.netGraphics.fillCircle(n.x, n.y, 2.2);
+
+    // Tiny specular highlight
+    this.netGraphics.fillStyle(0xffffff, 0.70 * alpha);
+    this.netGraphics.fillCircle(n.x - 0.6, n.y - 0.6, 0.9);
   }
+
+  // ── BOTTOM OPEN-END CORD TIPS — small accent dots at the net mouth ──────
+  for (let c = 0; c <= cols; c++) {
+    const n = this._netNode(basket, rows, c);
+    this.netFrontGraphics.fillStyle(tintColor, 0.35 * alpha);
+    this.netFrontGraphics.fillCircle(n.x, n.y, 1.8);
+  }
+}
 
   /** Trigger a net shake animation on score — replaces spring impulse */
   _impulseNet(basket, impactX, impactY, force = 280) {
