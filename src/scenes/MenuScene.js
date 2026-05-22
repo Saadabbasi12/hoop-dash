@@ -107,9 +107,13 @@ export class MenuScene extends Phaser.Scene {
       color: '#ffffff', letterSpacing: 10,
     }).setOrigin(0.5).setAlpha(0);
 
-    this.tweens.add({ targets: [btnBg, btnTxt], alpha: 1, duration: 500, delay: 680, ease: 'Cubic.easeOut' });
-    this.time.delayedCall(1400, () => {
-      this.tweens.add({ targets: btnBg, alpha: { from: 0.55, to: 1 }, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: [btnBg, btnTxt], alpha: 1, duration: 500, delay: 680, ease: 'Cubic.easeOut',
+      onComplete: () => {
+        this.btnPulseTween = this.tweens.add({
+          targets: [btnBg, btnTxt], alpha: { from: 1, to: 0.55 },
+          duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+      }
     });
 
     // ── HINT ──────────────────────────────────────────────────────────────
@@ -139,18 +143,27 @@ export class MenuScene extends Phaser.Scene {
     hitArea.on('pointerdown', startGame);
     hitArea.on('pointerover', () => {
       this.tweens.killTweensOf(btnBg);
+      this.tweens.killTweensOf(btnTxt);
       btnBg.clear();
       btnBg.lineStyle(1.6, 0xd4a017, 1);
       btnBg.strokeRoundedRect(W / 2 - btnW / 2, btnY - btnH / 2, btnW, btnH, btnR);
       btnBg.setAlpha(1);
+      btnTxt.setAlpha(1);
       btnTxt.setStyle({ color: '#d4a017' });
     });
     hitArea.on('pointerout', () => {
+      this.tweens.killTweensOf(btnBg);
+      this.tweens.killTweensOf(btnTxt);
       btnBg.clear();
       btnBg.lineStyle(1.4, 0xffffff, 0.55);
       btnBg.strokeRoundedRect(W / 2 - btnW / 2, btnY - btnH / 2, btnW, btnH, btnR);
       btnBg.setAlpha(1);
+      btnTxt.setAlpha(1);
       btnTxt.setStyle({ color: '#ffffff' });
+      this.btnPulseTween = this.tweens.add({
+        targets: [btnBg, btnTxt], alpha: { from: 1, to: 0.55 },
+        duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      });
     });
 
     this.input.keyboard?.on('keydown-SPACE', startGame);
