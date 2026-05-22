@@ -1273,46 +1273,62 @@ export class GameScene extends Phaser.Scene {
     const tb    = this.targetBasket;
     const zone  = tb.scoreZone;
     const rimY  = zone.y;
-    const halfW = zone.halfW * 1.1;
+    const hs    = this.hoopScale;
+    const rimR  = RIM_RADIUS * hs;
+    const ballR = 22 * this.ballScale;
+    const capR  = 7 * hs;
 
-    const hs      = this.hoopScale;
-    const rimR    = RIM_RADIUS * hs;
-    // Adjust cap and score-zone positions for basket tilt
-    const tiltRad  = (tb.tiltDeg || 0) * (Math.PI / 180);
-    const leftCap  = { x: tb.x - rimR * Math.cos(tiltRad), y: rimY - rimR * Math.sin(tiltRad) };
-    const rightCap = { x: tb.x + rimR * Math.cos(tiltRad), y: rimY + rimR * Math.sin(tiltRad) };
-    const ballR    = 22 * this.ballScale;
-    const capR     = 5 * hs; // tighter — only fires when ball truly touches rim tube
+    // ── Helper: check rim cap bounce for any basket ──────────────────────
+    const checkRimCaps = (basket, applyImpulse) => {
+      const tiltRad  = (basket.tiltDeg || 0) * (Math.PI / 180);
+      const bRimY    = basket.scoreZone.y;
+      const leftCap  = { x: basket.x - rimR * Math.cos(tiltRad), y: bRimY - rimR * Math.sin(tiltRad) };
+      const rightCap = { x: basket.x + rimR * Math.cos(tiltRad), y: bRimY + rimR * Math.sin(tiltRad) };
 
-    // Dandi collision — gated by cooldown so it only fires ONCE per contact
-    if (this.ballVY > -100) {
       [leftCap, rightCap].forEach(cap => {
         const dx = this.ballX - cap.x;
         const dy = this.ballY - cap.y;
         const d  = Math.hypot(dx, dy);
         if (d < ballR + capR) {
-          const nx = dx / (d || 1);
-          const ny = dy / (d || 1);
+          const nx  = dx / (d || 1);
+          const ny  = dy / (d || 1);
           const dot = this.ballVX * nx + this.ballVY * ny;
-          this.ballVX = (this.ballVX - 2 * dot * nx) * 0.55;
-          this.ballVY = (this.ballVY - 2 * dot * ny) * 0.55;
-          this.ballX = cap.x + nx * (ballR + capR + 1);
-          this.ballY = cap.y + ny * (ballR + capR + 1);
-          this._impulseNet(tb, this.ballX, this.ballY, 120);
-          // Only play sound once per rim contact (cooldown = 180ms)
-          const now = Date.now();
-        
+          // Only bounce if ball is moving INTO the cap
+          if (dot < 0) {
+            this.ballVX = (this.ballVX - 2 * dot * nx) * 0.55;
+            this.ballVY = (this.ballVY - 2 * dot * ny) * 0.55;
+            this.ballX  = cap.x + nx * (ballR + capR + 1);
+            this.ballY  = cap.y + ny * (ballR + capR + 1);
+            if (applyImpulse) this._impulseNet(basket, this.ballX, this.ballY, 120);
             soundManager.playBounce();
-        
+          }
         }
       });
-    }
+    };
 
-    // Score: ball falling through centre opening
+    // Check rim bounce on BOTH baskets (target + current)
+    checkRimCaps(tb, true);
+    checkRimCaps(this.currentBasket, false);
+
+    // ── Score zone: ball must pass cleanly through centre ─────────────────
+    // halfW is tighter (0.75x) so edge/rim hits don't accidentally score
+    const halfW = zone.halfW * 0.75;
+
+    // Also make sure ball is NOT touching either rim cap right now
+    const tiltRad   = (tb.tiltDeg || 0) * (Math.PI / 180);
+    const leftCapX  = tb.x - rimR * Math.cos(tiltRad);
+    const leftCapY  = rimY  - rimR * Math.sin(tiltRad);
+    const rightCapX = tb.x + rimR * Math.cos(tiltRad);
+    const rightCapY = rimY  + rimR * Math.sin(tiltRad);
+    const clearOfRims =
+      Math.hypot(this.ballX - leftCapX,  this.ballY - leftCapY)  > ballR + capR + 2 &&
+      Math.hypot(this.ballX - rightCapX, this.ballY - rightCapY) > ballR + capR + 2;
+
     if (this.ballVY > 0 &&
+        clearOfRims &&
         Math.abs(this.ballX - zone.x) < halfW &&
-        this.ballY > rimY - 18 &&
-        this.ballY < rimY + 36) {
+        this.ballY > rimY - 14 &&
+        this.ballY < rimY + 30) {
       this.ballInFlight = false;
       this._onScore();
     }
