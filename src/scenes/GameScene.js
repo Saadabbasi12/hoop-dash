@@ -621,7 +621,7 @@ export class GameScene extends Phaser.Scene {
     this.ballInFlight = false;
     this.ballInsideNet = false;
     this.netBallBasket = null;
-    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(7);
+    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(7).setRotation(0);
     this.tweens.add({ targets: this.ball, scaleX: this.ballScale * 1.22, scaleY: this.ballScale * 0.80, duration: 110, yoyo: true, ease: 'Power2' });
     soundManager.playBounce();
   }
@@ -1004,7 +1004,7 @@ export class GameScene extends Phaser.Scene {
 
     this.ballX = this._ballRestX + rawDX * clamp;
     this.ballY = this._ballRestY + rawDY * clamp;
-    this.ball.setPosition(this.ballX, this.ballY);
+    this.ball.setPosition(this.ballX, this.ballY).setRotation(0);
 
     this._drawAimGuide(ptr);
   }
@@ -1407,8 +1407,8 @@ export class GameScene extends Phaser.Scene {
       this.ballVY       += GRAVITY * dt * slowFactor;
       this.ballX        += this.ballVX * dt * slowFactor;
       this.ballY        += this.ballVY * dt * slowFactor;
-      this.ballRotation += this.ballVX * 0.005 * slowFactor;
-      this.ball.setPosition(this.ballX, this.ballY).setRotation(this.ballRotation);
+      this.ball.setPosition(this.ballX, this.ballY);
+
 
       // Trail
       this.trailTimer += dt;
