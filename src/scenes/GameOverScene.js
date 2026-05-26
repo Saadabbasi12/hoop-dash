@@ -23,20 +23,28 @@ export class GameOverScene extends Phaser.Scene {
 
     // ── CONFETTI for new best ──────────────────────────────────────────────
     if (isNewBest) {
+      // Pre-create all confetti at once then animate with stagger — no per-frame object creation
+      const cols = [0xffd700, 0xff6b35, 0x00f5d4, 0xff3355, 0x00aaff];
+      const confettiCount = 24; // reduced from 36, still looks great
+      const pieces = [];
+      for (let i = 0; i < confettiCount; i++) {
+        const x = Phaser.Math.Between(W * 0.08, W * 0.92);
+        const col = cols[i % cols.length];
+        const p = this.add.circle(x, H * 0.05, Phaser.Math.FloatBetween(3, 6), col, 0).setDepth(30);
+        pieces.push({ p, x });
+      }
       this.time.delayedCall(200, () => {
-        for (let i = 0; i < 36; i++) {
-          this.time.delayedCall(i * 30, () => {
-            const x   = Phaser.Math.Between(W * 0.08, W * 0.92);
-            const col = [0xffd700, 0xff6b35, 0x00f5d4, 0xff3355, 0x00aaff][Phaser.Math.Between(0, 4)];
-            const p   = this.add.circle(x, H * 0.05, Phaser.Math.FloatBetween(3, 7), col).setDepth(30);
+        pieces.forEach(({ p, x }, i) => {
+          this.time.delayedCall(i * 22, () => {
+            p.setAlpha(1);
             this.tweens.add({
-              targets: p, y: H * 0.55, x: x + Phaser.Math.Between(-80, 80),
-              alpha: 0, angle: Phaser.Math.Between(-180, 180),
-              duration: Phaser.Math.Between(700, 1300), ease: 'Power1',
+              targets: p, y: H * 0.55, x: x + Phaser.Math.Between(-70, 70),
+              alpha: 0, angle: Phaser.Math.Between(-160, 160),
+              duration: Phaser.Math.Between(650, 1100), ease: 'Power1',
               onComplete: () => p.destroy()
             });
           });
-        }
+        });
       });
     }
 
@@ -137,14 +145,21 @@ export class GameOverScene extends Phaser.Scene {
     });
     playHit.on('pointerover', () => {
       this.tweens.killTweensOf(playBg);
+      this.tweens.killTweensOf(playTxt);
       playBg.clear(); playBg.lineStyle(1.8, 0xff6b35, 1);
       playBg.strokeRoundedRect(W / 2 - btnW / 2, playBtnY - btnH / 2, btnW, btnH, btnR);
-      playBg.setAlpha(1); playTxt.setStyle({ color: '#ffffff' });
+      playBg.setAlpha(1);
+      playTxt.setAlpha(1);
+      playTxt.setStyle({ color: '#ffffff' });
     });
     playHit.on('pointerout', () => {
+      this.tweens.killTweensOf(playBg);
+      this.tweens.killTweensOf(playTxt);
       playBg.clear(); playBg.lineStyle(1.6, 0xff6b35, 0.85);
       playBg.strokeRoundedRect(W / 2 - btnW / 2, playBtnY - btnH / 2, btnW, btnH, btnR);
-      playBg.setAlpha(1); playTxt.setStyle({ color: '#ff6b35' });
+      playBg.setAlpha(1);
+      playTxt.setAlpha(1);
+      playTxt.setStyle({ color: '#ff6b35' });
     });
 
     const menuHit = this.add.rectangle(W / 2, menuBtnY, menuBtnW * 1.1, menuBtnH * 1.6, 0xffffff, 0).setInteractive({ useHandCursor: true });

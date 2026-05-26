@@ -5,39 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Hoop Dash</title>
-  <!-- CRITICAL: YouTube Playables SDK MUST be loaded before any game code -->
+
+  <!--
+    STEP 1: Load the YouTube Playables SDK synchronously (no defer, no async).
+    This blocks parsing until ytgame is fully available.
+  -->
   <script src="https://www.youtube.com/game_api/v1"></script>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+
+  <!--
+    STEP 2: Call firstFrameReady immediately — this is the loading screen appearing.
+    Must happen before any game code runs. Inline script runs synchronously
+    right after the SDK above, before the module below even starts loading.
+  -->
+  <script>
+    if (typeof ytgame !== 'undefined' && ytgame && ytgame.game && ytgame.game.firstFrameReady) {
+      ytgame.game.firstFrameReady();
     }
+  </script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      width: 100%;
-      height: 100%;
+      width: 100%; height: 100%;
       overflow: hidden;
-      background: #0a0a1a;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: #030812;
+      display: flex; align-items: center; justify-content: center;
     }
     #game-container {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
     }
-    canvas {
-      display: block;
-      max-width: 100%;
-      max-height: 100%;
-    }
+    canvas { display: block; max-width: 100%; max-height: 100%; }
   </style>
 </head>
 <body>
   <div id="game-container"></div>
+  <!--
+    STEP 3: Game module loads deferred (type="module" is always deferred by spec).
+    SDK and firstFrameReady are already done before this executes.
+    gameReady() will be called from MenuScene once the menu is interactive.
+  -->
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

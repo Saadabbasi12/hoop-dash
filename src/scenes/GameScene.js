@@ -1110,8 +1110,18 @@ export class GameScene extends Phaser.Scene {
 
   // ── YT CALLBACKS ──────────────────────────────────────────────────────────
   _setupYTCallbacks() {
-    YTPlayables.onPause(() => { this.isPaused = true; this._saveProgress(); });
-    YTPlayables.onResume(() => { this.isPaused = false; soundManager.resume(); });
+    // Register pause/resume via SDK (never use Page Visibility API per spec)
+    YTPlayables.onPause(() => {
+      this.isPaused = true;
+      soundManager.setEnabled(false);
+      this._saveProgress();
+    });
+    YTPlayables.onResume(() => {
+      this.isPaused = false;
+      soundManager.setEnabled(YTPlayables.isAudioEnabled());
+      soundManager.resume();
+    });
+    // Audio state from YouTube system
     YTPlayables.onAudioEnabledChange(en => soundManager.setEnabled(en));
     soundManager.setEnabled(YTPlayables.isAudioEnabled());
   }
@@ -1174,6 +1184,10 @@ export class GameScene extends Phaser.Scene {
       // soundManager.playHit();
       this._scoreTextPop(this.ballX, this.ballY - 30, '🛡️ BLOCKED!', '#4895ef');
       this._burst(this.ballX, this.ballY, 0x4895ef, 10);
+      // FIX: clear in-net state so ball can reset properly
+      this.ballInsideNet = false;
+      this.netBallBasket = null;
+      this.ball.setDepth(7).setAlpha(1);
       this.time.delayedCall(200, () => { if (!this.isGameOver) this._resetBall(); });
       return;
     }
@@ -1183,6 +1197,10 @@ export class GameScene extends Phaser.Scene {
     this._refreshHearts();
     soundManager.playMiss();
     this.cameras.main.shake(120, 0.012);
+    // FIX: always clear in-net state — prevents game freezing after losing a life
+    this.ballInsideNet = false;
+    this.netBallBasket = null;
+    this.ball.setDepth(7).setAlpha(1);
     if (this.lives <= 0) this._gameOver();
     else this.time.delayedCall(350, () => { if (!this.isGameOver) this._resetBall(); });
   }
@@ -1203,6 +1221,10 @@ export class GameScene extends Phaser.Scene {
     this.comboText.setAlpha(0);
     this.lives--;
     this._refreshHearts();
+    // FIX: always clear in-net state — prevents game freezing after obstacle hit
+    this.ballInsideNet = false;
+    this.netBallBasket = null;
+    this.ball.setDepth(7).setAlpha(1);
     if (this.lives <= 0) this._gameOver();
     else {
       this.ballInFlight = false;
@@ -1408,15 +1430,24 @@ export class GameScene extends Phaser.Scene {
     // ── Moving basket update
     this._stepBasketMovement(this.targetBasket, dt * slowFactor);
 
-    // ── Draw nets ──────────────────────────────────────────────────────────
-    this.netGraphics.clear();
-    this.netFrontGraphics.clear();
+    // ── Draw nets ──────────────────────────────────────────────────────────────────────
+    // FIX: only redraw net when something visually changed
+    // saves hundreds of canvas draw calls per frame and eliminates throw lag
+    const netNeedsRedraw =
+      this.ballInFlight ||
+      this.currentBasket.net.shakeAmt > 0.05 ||
+      Math.abs(this.currentBasket.net.dragOffsetX) > 0.5 ||
+      Math.abs(this.currentBasket.net.dragOffsetY) > 0.5 ||
+      this.targetBasket.net.shakeAmt > 0.05 ||
+      !!this.targetBasket.moveRange ||
+      this.frameCount % 4 === 0;
 
-    // Current basket net (cyan)
-    this._drawNet(this.currentBasket, 0x00e8c0, 0.75);
-
-    // Target basket net (orange) — drawn after current so it's on top
-    this._drawNet(this.targetBasket,  0xff7a20, 0.92);
+    if (netNeedsRedraw) {
+      this.netGraphics.clear();
+      this.netFrontGraphics.clear();
+      this._drawNet(this.currentBasket, 0x00e8c0, 0.75);
+      this._drawNet(this.targetBasket,  0xff7a20, 0.92);
+    }
 
     // ── Ball physics ───────────────────────────────────────────────────────
     if (this.ballInFlight) {

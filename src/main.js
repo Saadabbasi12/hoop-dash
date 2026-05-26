@@ -4,16 +4,12 @@ import { MenuScene } from './scenes/MenuScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
 
-/**
- * Responsive sizing: fills the full viewport on every device.
- * On desktop this means the full browser window.
- * On mobile portrait it fills the screen edge-to-edge.
- * A sensible max-width keeps it from becoming unplayable on ultra-wide monitors.
- */
+// firstFrameReady already called in index.html inline script.
+// This module is deferred so SDK + firstFrameReady fired before we get here.
+
 function getGameSize() {
   const w = window.innerWidth  || 390;
   const h = window.innerHeight || 844;
-  // Always use full viewport — RESIZE mode handles dynamic changes
   return { width: w, height: h };
 }
 
@@ -23,10 +19,10 @@ const config = {
   type: Phaser.AUTO,
   width,
   height,
-  parent: 'game-container',              // matches index.html div id
-  backgroundColor: '#0a0a1a',
+  parent: 'game-container',
+  backgroundColor: '#030812',
   scale: {
-    mode: Phaser.Scale.RESIZE,         // always fill available space
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   physics: {
@@ -35,24 +31,18 @@ const config = {
   },
   scene: [BootScene, MenuScene, GameScene, GameOverScene],
   input: { activePointers: 2 },
-  render: { antialias: true, pixelArt: false, roundPixels: false }
+  render: { antialias: true, pixelArt: false,  powerPreference: 'high-performance', roundPixels: false }
 };
 
 function startGame() {
-  // YouTube Playables WebView quirk — viewport height can briefly be 0
+  // YouTube Playables WebView quirk — viewport can briefly be 0
   if (window.innerHeight === 0) {
     window.addEventListener('resize', () => {
       if (window.innerHeight > 0) startGame();
     }, { once: true });
     return;
   }
-
-  const game = new Phaser.Game(config);
-
-  // Expose for debugging
-  if (typeof window !== 'undefined') {
-    window._mirrorDashGame = game;
-  }
+  new Phaser.Game(config);
 }
 
 startGame();

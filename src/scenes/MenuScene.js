@@ -3,9 +3,12 @@ import { YTPlayables } from '../utils/YTPlayables.js';
 import { soundManager } from '../utils/SoundManager.js';
 
 export class MenuScene extends Phaser.Scene {
-  constructor() { super({ key: 'MenuScene' }); this.bestScore = 0; }
+  constructor() {
+    super({ key: 'MenuScene' });
+    this.bestScore = 0;
+  }
 
-  async create() {
+  create() {
     const W = this.scale.width;
     const H = this.scale.height;
     const S = Math.min(W, H);
@@ -14,51 +17,58 @@ export class MenuScene extends Phaser.Scene {
     this.cameras.main.fadeIn(600);
     this.cameras.main.setBackgroundColor('#030812');
 
-    // ── LOAD DATA FIRST before any UI ─────────────────────────────────────
-    try {
-      const data = await YTPlayables.loadData();
-      if (data?.bestScore) this.bestScore = data.bestScore;
-    } catch (e) {}
+    // Load saved data in background — gameReady fires regardless
+    YTPlayables.loadData().then(data => {
+      if (data && data.bestScore) {
+        this.bestScore = data.bestScore;
+        if (this.bestScoreText) {
+          this.bestScorePill.setAlpha(1);
+          this.bestScoreText.setText('  BEST  ' + this.bestScore).setAlpha(1);
+        }
+      }
+    }).catch(() => {});
 
     // ── LOGO ──────────────────────────────────────────────────────────────
-    // Logo is BIG: up to 38% of screen height, 90% of width — whichever fits
     let logoH = 0;
     if (this.textures.exists('hoopdash_logo')) {
       const tex      = this.textures.get('hoopdash_logo').source[0];
-      const maxLogoH = H * 0.38;           // was 0.28 — much bigger now
-      const maxLogoW = W * 0.90;           // was 0.80 — use more width
+      const maxLogoH = H * 0.38;
+      const maxLogoW = W * 0.90;
       const scaleByH = maxLogoH / tex.height;
       const scaleByW = maxLogoW / tex.width;
       const scale    = Math.min(scaleByH, scaleByW);
       logoH          = tex.height * scale;
-
+      const logoY    = H * 0.025 + logoH / 2;
+      const logo     = this.add.image(W / 2, logoY, 'hoopdash_logo').setScale(scale).setAlpha(0);
+      this.tweens.add({ targets: logo, alpha: 1, duration: 560, ease: 'Cubic.easeOut', delay: 80 });
+    } else {
+      logoH = Math.min(S * 0.13, 52) * 1.4;
       const logoY = H * 0.025 + logoH / 2;
-      const logo  = this.add.image(W / 2, logoY, 'hoopdash_logo').setScale(scale).setAlpha(0);
+      const logo  = this.add.text(W / 2, logoY, '🏀 HOOP DASH', {
+        fontFamily: '"Arial Black", Impact, sans-serif',
+        fontSize: `${Math.min(S * 0.13, 52)}px`,
+        color: '#ff6b35', stroke: '#7a2c00', strokeThickness: 4,
+      }).setOrigin(0.5).setAlpha(0);
       this.tweens.add({ targets: logo, alpha: 1, duration: 560, ease: 'Cubic.easeOut', delay: 80 });
     }
 
     // ── SLOT LAYOUT ───────────────────────────────────────────────────────
-    // Remaining height below logo split into 4 slots: ball | best | play | hint
-    // On portrait mobile the ball gets a bigger slice so it sits lower & larger
-    const topUsed = H * 0.025 + logoH;
-    const botPad  = H * 0.04;
-    const avail   = H - topUsed - botPad;
-
-    // Give ball slot 35% of available space so it sits visually lower
+    const topUsed      = H * 0.025 + logoH;
+    const botPad       = H * 0.04;
+    const avail        = H - topUsed - botPad;
     const ballSlotFrac = isPortrait ? 0.35 : 0.30;
-    const restSlots    = 3;                           // best, btn, hint
     const ballSlotH    = avail * ballSlotFrac;
-    const otherSlotH   = (avail * (1 - ballSlotFrac)) / restSlots;
+    const otherSlotH   = (avail * (1 - ballSlotFrac)) / 3;
 
-    const ballY = topUsed + ballSlotH * 0.55;         // slightly lower in its slot
+    const ballY = topUsed + ballSlotH * 0.55;
     const bestY = topUsed + ballSlotH + otherSlotH * 0.50;
     const btnY  = topUsed + ballSlotH + otherSlotH * 1.50;
     const hintY = topUsed + ballSlotH + otherSlotH * 2.50;
 
     // ── BASKETBALL ────────────────────────────────────────────────────────
-    // Ball fills ~45% of its slot height — removed the tiny S*0.10 cap
     const ballDisplayR = Math.min(ballSlotH * 0.42, W * 0.18, 72);
-    const ballTexW     = this.textures.get('ball')?.source?.[0]?.width || 52;
+    const ballTexW     = this.textures.get('ball') && this.textures.get('ball').source[0]
+      ? this.textures.get('ball').source[0].width : 52;
     const ballScale    = (ballDisplayR * 2) / ballTexW;
 
     const shadow = this.add.ellipse(
@@ -79,17 +89,22 @@ export class MenuScene extends Phaser.Scene {
     });
 
     // ── BEST SCORE ────────────────────────────────────────────────────────
+    const pillW = Math.min(W * 0.55, 220);
+    const pillH = Math.min(otherSlotH * 0.55, 42);
+
+    this.bestScorePill = this.add.graphics().setAlpha(0);
+    this.bestScorePill.lineStyle(1, 0xd4a017, 0.6);
+    this.bestScorePill.strokeRoundedRect(W / 2 - pillW / 2, bestY - pillH / 2, pillW, pillH, pillH / 2);
+
+    this.bestScoreText = this.add.text(W / 2, bestY, '', {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize: `${Math.min(otherSlotH * 0.30, S * 0.048, 20)}px`,
+      color: '#d4a017', letterSpacing: 2,
+    }).setOrigin(0.5).setAlpha(0);
+
     if (this.bestScore > 0) {
-      const pillW = Math.min(W * 0.55, 220);
-      const pillH = Math.min(otherSlotH * 0.55, 42);
-      const pillG = this.add.graphics();
-      pillG.lineStyle(1, 0xd4a017, 0.6);
-      pillG.strokeRoundedRect(W / 2 - pillW / 2, bestY - pillH / 2, pillW, pillH, pillH / 2);
-      this.add.text(W / 2, bestY, `🏆  BEST  ${this.bestScore}`, {
-        fontFamily: '"Arial Black", Impact, sans-serif',
-        fontSize: `${Math.min(otherSlotH * 0.30, S * 0.048, 20)}px`,
-        color: '#d4a017', letterSpacing: 2,
-      }).setOrigin(0.5);
+      this.bestScorePill.setAlpha(1);
+      this.bestScoreText.setText('  BEST  ' + this.bestScore).setAlpha(1);
     }
 
     // ── PLAY BUTTON ───────────────────────────────────────────────────────
@@ -107,7 +122,8 @@ export class MenuScene extends Phaser.Scene {
       color: '#ffffff', letterSpacing: 10,
     }).setOrigin(0.5).setAlpha(0);
 
-    this.tweens.add({ targets: [btnBg, btnTxt], alpha: 1, duration: 500, delay: 680, ease: 'Cubic.easeOut',
+    this.tweens.add({
+      targets: [btnBg, btnTxt], alpha: 1, duration: 500, delay: 680, ease: 'Cubic.easeOut',
       onComplete: () => {
         this.btnPulseTween = this.tweens.add({
           targets: [btnBg, btnTxt], alpha: { from: 1, to: 0.55 },
@@ -123,7 +139,6 @@ export class MenuScene extends Phaser.Scene {
       color: '#d0bb9d', letterSpacing: 1,
     }).setOrigin(0.5).setAlpha(0.75);
 
-    // ── VERSION ───────────────────────────────────────────────────────────
     this.add.text(W - 10, H - 8, 'v1.0', {
       fontFamily: '"Courier New", monospace', fontSize: '9px', color: '#111820',
     }).setOrigin(1, 1);
@@ -166,13 +181,19 @@ export class MenuScene extends Phaser.Scene {
       });
     });
 
-    this.input.keyboard?.on('keydown-SPACE', startGame);
-    this.input.keyboard?.on('keydown-ENTER', startGame);
+    this.input.keyboard && this.input.keyboard.on('keydown-SPACE', startGame);
+    this.input.keyboard && this.input.keyboard.on('keydown-ENTER', startGame);
 
+    // ── YT SDK HOOKS ──────────────────────────────────────────────────────
     YTPlayables.onPause(() => this.scene.pause());
     YTPlayables.onResume(() => this.scene.resume());
     YTPlayables.onAudioEnabledChange(en => soundManager.setEnabled(en));
     soundManager.setEnabled(YTPlayables.isAudioEnabled());
+
+    // CRITICAL: gameReady MUST be called synchronously at end of create().
+    // Never delay it inside async/await — the menu is now interactive.
+    // YouTube removes its loading spinner only after this fires.
     YTPlayables.gameReady();
+    console.log('[YT] gameReady fired from MenuScene.create()');
   }
 }

@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { YTPlayables } from '../utils/YTPlayables.js';
 import { generateAssets } from '../utils/AssetGenerator.js';
 import { soundManager } from '../utils/SoundManager.js';
 import hoopdashUrl from '../assets/hoopdash.png';
@@ -9,12 +8,11 @@ export class BootScene extends Phaser.Scene {
   constructor() { super({ key: 'BootScene' }); }
 
   preload() {
-    YTPlayables.firstFrameReady();
-
+    // firstFrameReady already called in main.js before Phaser started.
+    // Load images — graceful fallback if files missing.
     this.load.image('basketball_png', basketballUrl);
     this.load.on('filecomplete-image-basketball_png', () => { this._usePng = true; });
     this.load.on('filefailed-image-basketball_png',  () => { this._usePng = false; });
-
     this.load.image('hoopdash_logo', hoopdashUrl);
 
     const W = this.scale.width;
@@ -23,7 +21,6 @@ export class BootScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#030812');
 
-    // ── LOADING BAR ────────────────────────────────────────────────────────
     const barW = Math.min(W * 0.55, 300);
     const barH = 4;
     const barX = W / 2 - barW / 2;
@@ -70,13 +67,19 @@ export class BootScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // ── LOGO ──────────────────────────────────────────────────────────────
     if (this.textures.exists('hoopdash_logo')) {
       const tex      = this.textures.get('hoopdash_logo').source[0];
       const logoMaxW = Math.min(W * 0.62, 320);
       const scale    = logoMaxW / tex.width;
       const logo     = this.add.image(W / 2, H * 0.40, 'hoopdash_logo').setScale(scale).setAlpha(0);
       this.tweens.add({ targets: logo, alpha: 1, duration: 500, ease: 'Cubic.easeOut' });
+    } else {
+      const S = Math.min(W, H);
+      this.add.text(W / 2, H * 0.40, '🏀 HOOP DASH', {
+        fontFamily: '"Arial Black", Impact, sans-serif',
+        fontSize: `${Math.min(S * 0.13, 52)}px`,
+        color: '#ff6b35', stroke: '#7a2c00', strokeThickness: 4,
+      }).setOrigin(0.5);
     }
 
     if (this._usePng && this.textures.exists('basketball_png')) {

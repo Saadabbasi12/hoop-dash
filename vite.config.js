@@ -7,6 +7,11 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       output: {
+        // Ensure all output filenames use only alphanumeric, _, -, . characters
+        // (YouTube Playables requirement — no special chars allowed)
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
         manualChunks: undefined,
       }
     }

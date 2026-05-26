@@ -48,7 +48,6 @@ export const YTPlayables = {
         await ytgame.game.saveData(str);
         console.log('[YT] saveData success');
       } else {
-        // Local fallback
         localStorage.setItem('hoop_dash_save', str);
       }
     } catch (e) {
@@ -63,7 +62,6 @@ export const YTPlayables = {
         if (str) return JSON.parse(str);
         return null;
       } else {
-        // Local fallback
         const str = localStorage.getItem('hoop_dash_save');
         if (str) return JSON.parse(str);
         return null;
