@@ -51,7 +51,8 @@ export class GameScene extends Phaser.Scene {
     this.ballRotation = 0;
     this.difficulty   = 1;
     this.frameCount   = 0;
-    this.totalBaskets = 0;
+    this.totalBaskets   = 0;
+    this.basketMoveAxis = 'h'; // 'h' = left/right, 'v' = up/down — flips every 3 baskets
     this.shieldActive = false; this.shieldTimer = 0;
     this.slowActive   = false; this.slowTimer   = 0;
     this.obstacles    = [];
@@ -451,6 +452,8 @@ export class GameScene extends Phaser.Scene {
       b.scoreZone.y += dy;
       if (b.netImg)      b.netImg.y      += dy;
       if (b.netImgFront) b.netImgFront.y += dy;
+      // Keep movement anchor points in sync with world scroll
+      if (b.baseY !== undefined) b.baseY += dy;
     });
     if (!this.ballInFlight) { this.ballY += dy; this.ball.y = this.ballY; }
     [...this.obstacles, ...this.gems, ...this.powerups].forEach(o => { if (o.active) o.y += dy; });
@@ -1103,6 +1106,24 @@ export class GameScene extends Phaser.Scene {
   _onScore() {
     this.totalBaskets++;
     this.combo++;
+
+    // Flip basket movement axis every 3 baskets: h→v→h→v...
+    // Only kicks in once movement starts (basket 5+), but track from start
+    if (this.totalBaskets % 3 === 0) {
+      this.basketMoveAxis = this.basketMoveAxis === 'h' ? 'v' : 'h';
+      // Apply immediately to the current moving target basket
+      if (this.targetBasket && this.targetBasket.moveRange) {
+        this.targetBasket.moveAxis      = this.basketMoveAxis;
+        this.targetBasket.moveCycleTime = 0;
+        // Snap both axes to base so there's no jump
+        this.targetBasket.x           = this.targetBasket.baseX;
+        this.targetBasket.img.x       = this.targetBasket.baseX;
+        this.targetBasket.scoreZone.x = this.targetBasket.baseX;
+        this.targetBasket.y           = this.targetBasket.baseY;
+        this.targetBasket.img.y       = this.targetBasket.baseY;
+        this.targetBasket.scoreZone.y = this.targetBasket.baseY;
+      }
+    }
     this.comboTimer = 3.5;
 
     const multiplier = Math.min(this.combo, 8);
@@ -1230,28 +1251,51 @@ export class GameScene extends Phaser.Scene {
    * baseX is the spawn X — basket oscillates around it.
    */
   _startBasketMovement(basket) {
-    const stage        = this.totalBaskets - 5;           // 0 at basket 5
-    const range        = Math.min(18 + Math.floor(stage / 4) * 6, 70);   // px, grows slowly
-    const period       = Math.max(2800 - stage * 80, 1400);               // ms, speeds up slowly
-    basket.moveRange   = range;
-    basket.movePeriod  = period;
-    basket.movePhase   = Math.random() * Math.PI * 2;     // random starting angle
-    basket.baseX       = basket.x;
-    basket.moveTime    = 0;
+    const stage          = this.totalBaskets - 5;
+    const range          = Math.min(18 + Math.floor(stage / 4) * 6, 70);
+    const period         = Math.max(2800 - stage * 80, 1400);
+    basket.moveRange     = range;
+    basket.movePeriod    = period;
+    basket.baseX         = basket.x;
+    basket.baseY         = basket.y;
+    basket.moveCycleTime = 0;
+    // Always inherit the current global axis so new basket matches what player expects
+    basket.moveAxis      = this.basketMoveAxis;
   }
 
   /**
-   * Called every frame — updates basket.x, img.x, scoreZone.x along sine wave.
+   * Move ONLY on basket.moveAxis — the other axis is frozen.
+   * Axis is driven by basketMoveAxis (global), which flips every 3 scored baskets.
    */
   _stepBasketMovement(basket, dt) {
     if (!basket || !basket.moveRange) return;
-    basket.moveTime += dt * 1000;
-    const newX = basket.baseX + Math.sin(
-      (basket.moveTime / basket.movePeriod) * Math.PI * 2 + basket.movePhase
-    ) * basket.moveRange;
-    basket.x           = newX;
-    basket.img.x       = newX;
-    basket.scoreZone.x = newX;
+
+    basket.moveCycleTime += dt * 1000;
+    const t = (basket.moveCycleTime / basket.movePeriod) * Math.PI * 2;
+
+    // Keep axis in sync with global (flipped in _onScore every 3 baskets)
+    basket.moveAxis = this.basketMoveAxis;
+
+    if (basket.moveAxis === 'h') {
+      // Left / right only — Y stays at rest
+      basket.x           = basket.baseX + Math.sin(t) * basket.moveRange;
+      basket.img.x       = basket.x;
+      basket.scoreZone.x = basket.x;
+      basket.y           = basket.baseY;
+      basket.img.y       = basket.baseY;
+      basket.scoreZone.y = basket.baseY;
+    } else {
+      // Up / down only — X stays at rest
+      const hudBottom = this.H * 0.09;
+      const maxUp     = Math.max(basket.baseY - hudBottom - 30, 0);
+      const vRange    = Math.min(basket.moveRange * 0.65, maxUp, 40);
+      basket.y           = basket.baseY + Math.sin(t) * vRange;
+      basket.img.y       = basket.y;
+      basket.scoreZone.y = basket.y;
+      basket.x           = basket.baseX;
+      basket.img.x       = basket.baseX;
+      basket.scoreZone.x = basket.baseX;
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
