@@ -207,9 +207,58 @@ export class GameScene extends Phaser.Scene {
       rimR, rimWidth, netHeight,
       shakeAmt: 0,
       shakeDecay: 0,
-      dragOffsetX: 0,  // lateral pull from ball drag
+      dragOffsetX: 0,
       dragOffsetY: 0
     };
+
+    // ── basket.png net image ──────────────────────────────────────────────
+    // basket.png is 1024×1024. Content layout (measured):
+    //   • Black padding top:        ~14%  (y=0..143)
+    //   • Orange ring top edge:     ~14%  (y≈143)
+    //   • Orange ring bottom edge:  ~30%  (y≈307)  ← we anchor HERE at basket.y
+    //   • White net bottom:         ~68%  (y≈697)
+    //   • Black padding bottom:     ~32%
+    //
+    // Strategy: setOrigin(0.5, 0.30) → the bottom of the orange ring sits
+    // exactly at basket.y. The ring itself is hidden BEHIND the hoop image.
+    // Only the white net hangs below. Scale so net opening = rim width.
+    const texKey = 'basket_net';
+    if (this.textures.exists(texKey)) {
+      const src = this.textures.get(texKey).source[0];
+      // basket.png layout (1024×1024):
+      //   orange ring inner bottom ≈ 32% from top  ← anchor here
+      //   net content zone         ≈ 32%–68%  (36% of height)
+      const targetNetH  = rimWidth * 0.85;
+      const netZoneFrac = 0.36;
+      const scale       = targetNetH / (src.height * netZoneFrac);
+
+      // ── BACK layer — depth 5 (behind ball at depth 7) ─────────────────
+      // Always visible. Shows ring + back net cords behind the ball.
+      const imgBack = this.add.image(basket.x, basket.y, texKey)
+        .setOrigin(0.5, 0.18)
+        .setScale(scale)
+        .setDepth(5)
+        .setAlpha(1.0)
+        .setAngle(basket.tiltDeg || 0);
+
+      // ── FRONT layer — depth 9 (in front of ball at depth 7) ───────────
+      // Hidden by default. Made visible when ball is inside net so the
+      // front cords render OVER the ball → ball looks trapped inside.
+      const imgFront = this.add.image(basket.x, basket.y, texKey)
+        .setOrigin(0.5, 0.18)
+        .setScale(scale)
+        .setDepth(9)
+        .setAlpha(0)             // invisible until ball enters
+        .setAngle(basket.tiltDeg || 0);
+
+      basket.netImg      = imgBack;   // primary reference (used by existing code)
+      basket.netImgFront = imgFront;  // front overlay
+      basket.netBaseScale = scale;
+    } else {
+      basket.netImg      = null;
+      basket.netImgFront = null;
+      basket.netBaseScale = this.hoopScale;
+    }
   }
 
   /**
@@ -246,7 +295,7 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  /** Tick net — update drag offset and shake decay */
+  /** Tick net — update drag offset and shake decay, then move netImg */
   _stepNet(basket, dt) {
     const net = basket.net;
     if (!net) return;
@@ -259,14 +308,37 @@ export class GameScene extends Phaser.Scene {
       net.dragOffsetY = dy;
     } else {
       // Smoothly spring back to rest when not dragging
-      net.dragOffsetX *= 0.75;
-      net.dragOffsetY *= 0.75;
+      net.dragOffsetX *= 0.88;
+      net.dragOffsetY *= 0.88;
     }
 
     // Shake decay
     if (net.shakeAmt > 0) {
       net.shakeAmt -= net.shakeDecay * dt;
       if (net.shakeAmt < 0) net.shakeAmt = 0;
+    }
+
+    // ── Drive basket.png image from physics state ─────────────────────────
+    if (basket.netImg) {
+      const shakeX = net.shakeAmt * Math.sin(Date.now() * 0.025) * 0.6;
+      const nx     = basket.x + shakeX;
+      const ny     = basket.y;
+
+      // Tilt: opposite to drag direction (drag right → tilt left = negative angle)
+      // Only apply to current basket while player is dragging
+      const isDragging = this.dragStart && !this.ballInFlight && basket === this.currentBasket;
+      const dragTilt   = isDragging ? -net.dragOffsetX * 0.45 : 0;
+      const shakeTilt  = net.shakeAmt * 0.3 * Math.sin(Date.now() * 0.018);
+      const angle      = (basket.tiltDeg || 0) + dragTilt + shakeTilt;
+
+      basket.netImg.x = nx;
+      basket.netImg.y = ny;
+      basket.netImg.setAngle(angle);
+      if (basket.netImgFront) {
+        basket.netImgFront.x = nx;
+        basket.netImgFront.y = ny;
+        basket.netImgFront.setAngle(angle);
+      }
     }
   }
 
@@ -277,118 +349,9 @@ export class GameScene extends Phaser.Scene {
    * This makes the ball look like it's sitting INSIDE the net.
    */
  _drawNet(basket, tintColor, alpha = 1) {
-  const net  = basket.net;
-  if (!net) return;
-  const rows = NET_ROWS;
-  const cols = NET_COLS;
-  const splitRow = 2;
-
-  // ── Derive a bright accent and a dim shadow colour from tintColor ──────
-  // tintColor is a hex number like 0x00e8c0 or 0xff7a20
-  const tr = (tintColor >> 16) & 0xff;
-  const tg = (tintColor >>  8) & 0xff;
-  const tb =  tintColor        & 0xff;
-  // Bright: mix tint 60% with white 40%
-  const br = Math.min(255, tr + 102) & 0xff;
-  const bg = Math.min(255, tg + 102) & 0xff;
-  const bb = Math.min(255, tb + 102) & 0xff;
-  const brightColor = (br << 16) | (bg << 8) | bb;
-  // Shadow: tint × 0.35
-  const sr = Math.round(tr * 0.35) & 0xff;
-  const sg = Math.round(tg * 0.35) & 0xff;
-  const sb = Math.round(tb * 0.35) & 0xff;
-  const shadowColor = (sr << 16) | (sg << 8) | sb;
-
-  const drawSegment = (g, fromRow, toRow) => {
-
-    // ── SHADOW PASS — offset lines give the cord a 3-D rope look ──────────
-    for (let c = 0; c <= cols; c++) {
-      for (let r = fromRow; r < toRow; r++) {
-        const n1 = this._netNode(basket, r,     c);
-        const n2 = this._netNode(basket, r + 1, c);
-        const t  = r / rows;
-        g.lineStyle(3.2 - t * 0.8, shadowColor, (0.55 - t * 0.28) * alpha);
-        g.lineBetween(n1.x + 1.2, n1.y + 1.2, n2.x + 1.2, n2.y + 1.2);
-      }
-    }
-    for (let r = Math.max(fromRow, 1); r <= toRow; r++) {
-      for (let c = 0; c < cols; c++) {
-        const n1 = this._netNode(basket, r, c);
-        const n2 = this._netNode(basket, r, c + 1);
-        const t  = r / rows;
-        g.lineStyle(2.2 - t * 0.5, shadowColor, (0.45 - t * 0.22) * alpha);
-        g.lineBetween(n1.x + 1.0, n1.y + 1.0, n2.x + 1.0, n2.y + 1.0);
-      }
-    }
-
-    // ── MAIN CORD PASS — tinted, fading top-to-bottom ─────────────────────
-    for (let c = 0; c <= cols; c++) {
-      for (let r = fromRow; r < toRow; r++) {
-        const n1    = this._netNode(basket, r,     c);
-        const n2    = this._netNode(basket, r + 1, c);
-        const t     = r / rows;
-        // Vertical strands: start with bright tint at top, fade to dim tint
-        const color = t < 0.35 ? brightColor : tintColor;
-        const fade  = (0.98 - t * 0.55) * alpha;
-        const thick = 2.4 - t * 0.75;
-        g.lineStyle(thick, color, fade);
-        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
-      }
-    }
-
-    // Horizontal rings — slightly dimmer, use tintColor throughout
-    for (let r = Math.max(fromRow, 1); r <= toRow; r++) {
-      for (let c = 0; c < cols; c++) {
-        const n1   = this._netNode(basket, r, c);
-        const n2   = this._netNode(basket, r, c + 1);
-        const t    = r / rows;
-        const fade = (0.75 - t * 0.42) * alpha;
-        const thick = 1.8 - t * 0.55;
-        g.lineStyle(thick, tintColor, fade);
-        g.lineBetween(n1.x, n1.y, n2.x, n2.y);
-      }
-    }
-
-    // ── HIGHLIGHT PASS — thin bright centre line on top vertical strands ──
-    for (let c = 0; c <= cols; c++) {
-      for (let r = fromRow; r < Math.min(toRow, 2); r++) {
-        const n1 = this._netNode(basket, r,     c);
-        const n2 = this._netNode(basket, r + 1, c);
-        g.lineStyle(0.8, 0xffffff, 0.55 * alpha);
-        g.lineBetween(n1.x - 0.5, n1.y, n2.x - 0.5, n2.y);
-      }
-    }
-  };
-
-  // Back half (behind ball)
-  drawSegment(this.netGraphics, 0, splitRow);
-  // Front half (in front of ball)
-  drawSegment(this.netFrontGraphics, splitRow, rows);
-
-  // ── RIM ATTACHMENT KNOTS — glowing dots where net meets the rim ─────────
-  for (let c = 0; c <= cols; c++) {
-    const n = this._netNode(basket, 0, c);
-
-    // Outer glow ring
-    this.netGraphics.fillStyle(tintColor, 0.25 * alpha);
-    this.netGraphics.fillCircle(n.x, n.y, 4.5);
-
-    // Main bright knot
-    this.netGraphics.fillStyle(brightColor, 0.90 * alpha);
-    this.netGraphics.fillCircle(n.x, n.y, 2.2);
-
-    // Tiny specular highlight
-    this.netGraphics.fillStyle(0xffffff, 0.70 * alpha);
-    this.netGraphics.fillCircle(n.x - 0.6, n.y - 0.6, 0.9);
+    // Net is now rendered as basket.png image — see _createNet / _stepNet.
+    // Graphics layers kept for depth management but draw nothing.
   }
-
-  // ── BOTTOM OPEN-END CORD TIPS — small accent dots at the net mouth ──────
-  for (let c = 0; c <= cols; c++) {
-    const n = this._netNode(basket, rows, c);
-    this.netFrontGraphics.fillStyle(tintColor, 0.35 * alpha);
-    this.netFrontGraphics.fillCircle(n.x, n.y, 1.8);
-  }
-}
 
   /** Trigger a net shake animation on score — replaces spring impulse */
   _impulseNet(basket, impactX, impactY, force = 280) {
@@ -448,9 +411,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   _makeBasket(x, y, rimColor, tiltDeg = 0) {
+    // hoop img is kept as an invisible anchor for tweens/collision geometry
+    // but hidden — basket.png (netImg) provides the full visual ring + net.
     const img = this.add.image(x, y, 'hoop')
       .setScale(this.hoopScale)
-      .setDepth(4);
+      .setDepth(4)
+      .setAlpha(0);
     img.setTint(rimColor);
     img.setAngle(tiltDeg);
 
@@ -463,14 +429,17 @@ export class GameScene extends Phaser.Scene {
       net: null
     };
     this._createNet(basket);
+    // No tint on netImg — basket.png uses its own natural colors
     return basket;
   }
 
   _pulseBasket(basket) {
+    const target    = basket.netImg || basket.img;
+    const baseScale = basket.netBaseScale || this.hoopScale;
     this.tweens.add({
-      targets: basket.img,
-      scaleX: this.hoopScale * 1.06,
-      scaleY: this.hoopScale * 1.06,
+      targets: target,
+      scaleX: baseScale * 1.05,
+      scaleY: baseScale * 1.05,
       duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
     });
   }
@@ -480,7 +449,8 @@ export class GameScene extends Phaser.Scene {
       b.y += dy;
       b.img.y += dy;
       b.scoreZone.y += dy;
-      // Static net recomputes from basket.y each frame — no nodes to shift
+      if (b.netImg)      b.netImg.y      += dy;
+      if (b.netImgFront) b.netImgFront.y += dy;
     });
     if (!this.ballInFlight) { this.ballY += dy; this.ball.y = this.ballY; }
     [...this.obstacles, ...this.gems, ...this.powerups].forEach(o => { if (o.active) o.y += dy; });
@@ -490,12 +460,20 @@ export class GameScene extends Phaser.Scene {
   _advanceBaskets() {
     // Fade out old current basket
     this.tweens.killTweensOf(this.currentBasket.img);
-    const oldImg = this.currentBasket.img;
+    const oldImg    = this.currentBasket.img;
+    const oldNetImg      = this.currentBasket.netImg;
+    const oldNetImgFront = this.currentBasket.netImgFront;
     this.tweens.add({ targets: oldImg, alpha: 0, y: oldImg.y + 30, duration: 350, onComplete: () => oldImg.destroy() });
+    if (oldNetImg)      this.tweens.add({ targets: oldNetImg,      alpha: 0, y: oldNetImg.y      + 30, duration: 350, onComplete: () => oldNetImg.destroy() });
+    if (oldNetImgFront) this.tweens.add({ targets: oldNetImgFront, alpha: 0, y: oldNetImgFront.y + 30, duration: 350, onComplete: () => oldNetImgFront.destroy() });
 
     // Promote target → current
     this.currentBasket = this.targetBasket;
     this.currentBasket.img.setTint(0x00f5d4);
+    if (this.currentBasket.netImg) {
+      // No tint on netImg — keep natural basket.png colors
+      this.tweens.killTweensOf(this.currentBasket.netImg);
+    }
     this.tweens.killTweensOf(this.currentBasket.img);
     this.currentBasket.img.setScale(this.hoopScale);
 
@@ -538,27 +516,34 @@ export class GameScene extends Phaser.Scene {
     const rimY     = targetBasket.y;
     const exitY    = rimY + 55 * this.hoopScale;
 
-    // Mark ball as inside net — drop depth so net cords render over ball
+    // Ball enters net — depth 4 puts it behind net image (depth 5)
     this.ballInsideNet = true;
     this.netBallBasket = targetBasket;
-    this.ball.setDepth(3); // behind netGraphics so cords visually wrap over ball
+    this.ball.setDepth(4);
 
     // Big downward impulse on net nodes
     this._impulseNet(targetBasket, targetBasket.x, rimY + 10, 360);
 
-    // Rim image squash
+    // Rim squash — applied to netImg (visible); img is invisible anchor
+    const netImg   = targetBasket.netImg;
+    const baseS    = targetBasket.netBaseScale || this.hoopScale;
+    const squashTarget = netImg || img;
     this.tweens.add({
-      targets: img,
-      scaleY: this.hoopScale * 1.28,
-      scaleX: this.hoopScale * 0.90,
+      targets: squashTarget,
+      scaleY: baseS * 1.18,
+      scaleX: baseS * 0.92,
       duration: 80, ease: 'Power2', yoyo: true,
       onComplete: () => {
         this.tweens.add({
-          targets: img,
-          scaleX: this.hoopScale * 1.06,
-          scaleY: this.hoopScale * 0.94,
+          targets: squashTarget,
+          scaleX: baseS * 1.04,
+          scaleY: baseS * 0.96,
           duration: 70, yoyo: true, ease: 'Power1',
-          onComplete: () => { img.setScale(this.hoopScale); if (onDone) onDone(); }
+          onComplete: () => {
+            if (netImg) netImg.setScale(baseS);
+            else img.setScale(this.hoopScale);
+            if (onDone) onDone();
+          }
         });
       }
     });
@@ -585,7 +570,7 @@ export class GameScene extends Phaser.Scene {
           ease: 'Power2',
           onComplete: () => {
             this.ball.setAlpha(0);
-            this.ball.setDepth(7); // restore above net for next throw
+            this.ball.setDepth(4);
             this.ballInsideNet = false;
             this.netBallBasket = null;
           }
@@ -607,7 +592,7 @@ export class GameScene extends Phaser.Scene {
     this.ballY = this.currentBasket.y + netHeight * 0.30;
     this.ball = this.add.image(this.ballX, this.ballY, 'ball')
       .setScale(this.ballScale)
-      .setDepth(7);  // above netGraphics back (depth 6), below netFrontGraphics (depth 8)
+      .setDepth(4);  // above netGraphics back (depth 6), below netFrontGraphics (depth 8)
     this.dragLine       = this.add.graphics().setDepth(9);
     this.powerIndicator = this.add.graphics().setDepth(9);
   }
@@ -621,7 +606,7 @@ export class GameScene extends Phaser.Scene {
     this.ballInFlight = false;
     this.ballInsideNet = false;
     this.netBallBasket = null;
-    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(7).setRotation(0);
+    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(4).setRotation(0);
     this.tweens.add({ targets: this.ball, scaleX: this.ballScale * 1.22, scaleY: this.ballScale * 0.80, duration: 110, yoyo: true, ease: 'Power2' });
     soundManager.playBounce();
   }
@@ -660,21 +645,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  _spawnGem() {
-    const { W } = this;
-    const topY    = this.targetBasket.y + 20;
-    const bottomY = this.currentBasket.y - 40;
-    if (bottomY - topY < 40) return;
-    const x = Phaser.Math.Between(W * 0.15, W * 0.85);
-    const y = Phaser.Math.Between(topY, bottomY);
-    const gem = this.add.image(x, y, 'gem').setDepth(6);
-    this.tweens.add({ targets: gem, y: y - 10, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: gem, angle: 360, duration: 2200, repeat: -1, ease: 'Linear' });
-    gem._radius = 10;
-    this.gems.push(gem);
-    while (this.gems.length > 3) { const old = this.gems.shift(); old.destroy(); }
-  }
-
+ 
   _spawnPowerup() {
     const { W } = this;
     const topY    = this.targetBasket.y + 30;
@@ -1187,7 +1158,7 @@ export class GameScene extends Phaser.Scene {
       // FIX: clear in-net state so ball can reset properly
       this.ballInsideNet = false;
       this.netBallBasket = null;
-      this.ball.setDepth(7).setAlpha(1);
+      this.ball.setDepth(4).setAlpha(1);
       this.time.delayedCall(200, () => { if (!this.isGameOver) this._resetBall(); });
       return;
     }
@@ -1200,7 +1171,7 @@ export class GameScene extends Phaser.Scene {
     // FIX: always clear in-net state — prevents game freezing after losing a life
     this.ballInsideNet = false;
     this.netBallBasket = null;
-    this.ball.setDepth(7).setAlpha(1);
+    this.ball.setDepth(4).setAlpha(1);
     if (this.lives <= 0) this._gameOver();
     else this.time.delayedCall(350, () => { if (!this.isGameOver) this._resetBall(); });
   }
@@ -1224,7 +1195,7 @@ export class GameScene extends Phaser.Scene {
     // FIX: always clear in-net state — prevents game freezing after obstacle hit
     this.ballInsideNet = false;
     this.netBallBasket = null;
-    this.ball.setDepth(7).setAlpha(1);
+    this.ball.setDepth(4).setAlpha(1);
     if (this.lives <= 0) this._gameOver();
     else {
       this.ballInFlight = false;
