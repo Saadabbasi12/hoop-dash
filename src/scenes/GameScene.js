@@ -308,7 +308,7 @@ export class GameScene extends Phaser.Scene {
   _initBaskets() {
     const { W, H } = this;
     const shortSide = Math.min(W, H);
-    this.hoopScale  = Phaser.Math.Clamp(shortSide / 420, 0.75, 2.2);
+    this.hoopScale  = Phaser.Math.Clamp(shortSide / 420, 0.75, 2.2) * 0.80;
 
     this.nextBasketSide = 0;
 
