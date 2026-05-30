@@ -97,20 +97,25 @@ export class GameScene extends Phaser.Scene {
   _buildBackground() {
     const { W, H } = this;
 
-    // ── COURT FLOOR — pure deep navy, no gradient bleed ─────────────────────
-    const bg = this.add.graphics().setDepth(-10);
-    bg.fillStyle(0x050a14, 1);
-    bg.fillRect(0, 0, W, H);
+    // ── BACKGROUND IMAGE — matt black texture fills entire screen ────────────
+    if (this.textures.exists('bg')) {
+      this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
+    } else {
+      const bg = this.add.graphics().setDepth(-20);
+      bg.fillStyle(0x050a14, 1);
+      bg.fillRect(0, 0, W, H);
+    }
 
     // ── BRICK WALLS ───────────────────────────────────────────────────────────
     const wallW = Math.round(W * 0.082);
-    this._drawBrickWall(bg, 0,          0, wallW, H, false);
-    this._drawBrickWall(bg, W - wallW,  0, wallW, H, true);
+    const wallGfx = this.add.graphics().setDepth(-10);
+    this._drawBrickWall(wallGfx, 0,          0, wallW, H, false);
+    this._drawBrickWall(wallGfx, W - wallW,  0, wallW, H, true);
 
     // ── CLEAN HARD SHADOW — just a 1px dark line, no bleed into court ────────
-    bg.lineStyle(1, 0x000000, 1);
-    bg.lineBetween(wallW,     0, wallW,     H);
-    bg.lineBetween(W - wallW, 0, W - wallW, H);
+    wallGfx.lineStyle(1, 0x000000, 1);
+    wallGfx.lineBetween(wallW,     0, wallW,     H);
+    wallGfx.lineBetween(W - wallW, 0, W - wallW, H);
 
     // Store wall boundaries for ball bounce
     this.leftWallX  = wallW;
@@ -267,21 +272,54 @@ export class GameScene extends Phaser.Scene {
 
     if (basket.netImg) {
       const shakeX = net.shakeAmt * Math.sin(Date.now() * 0.025) * 0.6;
-      const nx     = basket.x + shakeX;
-      const ny     = basket.y;
 
       const isDragging = this.dragStart && !this.ballInFlight && basket === this.currentBasket;
       const dragTilt   = isDragging ? -net.dragOffsetX * 0.45 : 0;
       const shakeTilt  = net.shakeAmt * 0.3 * Math.sin(Date.now() * 0.018);
       const angle      = (basket.tiltDeg || 0) + dragTilt + shakeTilt;
 
-      basket.netImg.x = nx;
-      basket.netImg.y = ny;
-      basket.netImg.setAngle(angle);
-      if (basket.netImgFront) {
-        basket.netImgFront.x = nx;
-        basket.netImgFront.y = ny;
-        basket.netImgFront.setAngle(angle);
+      // While dragging: shift and stretch net image toward ball position
+      const baseS = basket.netBaseScale || this.hoopScale;
+      if (isDragging) {
+        // Horizontal offset: net mouth follows ball (attenuated)
+        const nx = basket.x + net.dragOffsetX * 0.35 + shakeX;
+        // Vertical stretch: how far ball is pulled downward stretches net
+        const pullDown  = Math.max(net.dragOffsetY, 0);           // only stretch, not compress
+        const pullUp    = Math.min(net.dragOffsetY, 0);           // pulling up compresses slightly
+        const stretchY  = 1 + pullDown * 0.008;                   // grow taller as ball pulls down
+        const squishY   = 1 + pullUp  * 0.004;                    // slight squish when pulled up
+        const scaleY    = baseS * stretchY * squishY;
+        // Slight horizontal squish when stretched (volume conservation feel)
+        const scaleX    = baseS / Math.max(stretchY, 1) * 0.96 + baseS * 0.04;
+        // Net origin shifts toward ball horizontally
+        const ny = basket.y + pullDown * 0.12;
+
+        basket.netImg.x = nx;
+        basket.netImg.y = ny;
+        basket.netImg.setAngle(angle);
+        basket.netImg.setScale(scaleX, scaleY);
+        if (basket.netImgFront) {
+          basket.netImgFront.x = nx;
+          basket.netImgFront.y = ny;
+          basket.netImgFront.setAngle(angle);
+          basket.netImgFront.setScale(scaleX, scaleY);
+        }
+      } else {
+        // Not dragging: spring back to base scale (already handled by dragOffsetX/Y decay)
+        const relaxStretch = 1 + Math.max(net.dragOffsetY, 0) * 0.008;
+        const relaxScaleY  = baseS * relaxStretch;
+        const relaxScaleX  = baseS / Math.max(relaxStretch, 1) * 0.96 + baseS * 0.04;
+
+        basket.netImg.x = basket.x + shakeX;
+        basket.netImg.y = basket.y + Math.max(net.dragOffsetY, 0) * 0.12;
+        basket.netImg.setAngle(angle);
+        basket.netImg.setScale(relaxScaleX, relaxScaleY);
+        if (basket.netImgFront) {
+          basket.netImgFront.x = basket.netImg.x;
+          basket.netImgFront.y = basket.netImg.y;
+          basket.netImgFront.setAngle(angle);
+          basket.netImgFront.setScale(relaxScaleX, relaxScaleY);
+        }
       }
     }
   }

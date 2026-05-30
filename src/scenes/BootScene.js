@@ -4,6 +4,7 @@ import { soundManager } from '../utils/SoundManager.js';
 import hoopdashUrl from '../assets/hoopdash.png';
 import basketballUrl from '../assets/basketball.png';
 import basketUrl from '../assets/basket.png';
+import backgroundUrl from '../assets/background.png';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super({ key: 'BootScene' }); }
@@ -12,6 +13,7 @@ export class BootScene extends Phaser.Scene {
     // firstFrameReady already called in main.js before Phaser started.
     // Load images — graceful fallback if files missing.
     this.load.image('basketball_png', basketballUrl);
+    this.load.image('bg', backgroundUrl);
     this.load.on('filecomplete-image-basketball_png', () => { this._usePng = true; });
     this.load.on('filefailed-image-basketball_png',  () => { this._usePng = false; });
     this.load.image('basket_net', basketUrl);
@@ -22,6 +24,11 @@ export class BootScene extends Phaser.Scene {
     const S = Math.min(W, H);
 
     this.cameras.main.setBackgroundColor('#030812');
+
+    // Background image — stretched to fill screen
+    if (this.textures.exists('bg')) {
+      this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
+    }
 
     const barW = Math.min(W * 0.55, 300);
     const barH = 4;

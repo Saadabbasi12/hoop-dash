@@ -17,6 +17,11 @@ export class MenuScene extends Phaser.Scene {
     this.cameras.main.fadeIn(600);
     this.cameras.main.setBackgroundColor('#030812');
 
+    // Background image — stretched to fill screen
+    if (this.textures.exists('bg')) {
+      this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
+    }
+
     // Load saved data in background — gameReady fires regardless
     YTPlayables.loadData().then(data => {
       if (data && data.bestScore) {

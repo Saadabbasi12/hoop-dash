@@ -19,6 +19,11 @@ export class GameOverScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#030812');
     this.cameras.main.fadeIn(400);
 
+    // Background image — stretched to fill screen
+    if (this.textures.exists('bg')) {
+      this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
+    }
+
     const isNewBest = this.finalScore > 0 && this.finalScore >= this.bestScore;
 
     // ── CONFETTI for new best ──────────────────────────────────────────────
