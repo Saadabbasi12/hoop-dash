@@ -559,7 +559,7 @@ export class GameScene extends Phaser.Scene {
     this.ballScale = ballDisplayPx / ballTexW;
     const netHeight = 56 * this.hoopScale;
     this.ballX = this.currentBasket.x;
-    this.ballY = this.currentBasket.y + netHeight * 0.30;
+    this.ballY = this.currentBasket.y + netHeight * 0.65;
     this.ball = this.add.image(this.ballX, this.ballY, 'ball')
       .setScale(this.ballScale)
       .setDepth(4);
@@ -570,7 +570,7 @@ export class GameScene extends Phaser.Scene {
   _resetBall() {
     const netHeight = 56 * this.hoopScale;
     this.ballX = this.currentBasket.x;
-    this.ballY = this.currentBasket.y + netHeight * 0.30;
+    this.ballY = this.currentBasket.y + netHeight * 0.65;
     this.ballVX = this.ballVY = 0;
     this.ballRotation = 0;
     this.ballInFlight = false;
@@ -663,8 +663,9 @@ export class GameScene extends Phaser.Scene {
     this.add.text(W / 2, scorePillY + 4, 'SCORE', {
       fontFamily: '"Courier New", monospace',
       fontSize: `${labelSize}px`,
+      fontStyle: 'bold', 
       color: '#b0ebf6',
-      letterSpacing: 3,
+      letterSpacing: 5,
     }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
 
     const numSize = Math.min(fs(0.042, 16), scorePillH * 0.40);
