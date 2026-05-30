@@ -30,12 +30,16 @@ export class BootScene extends Phaser.Scene {
       this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
     }
 
+    // ── PROGRESS BAR ──────────────────────────────────────────────────────
     const barW = Math.min(W * 0.55, 300);
     const barH = 4;
     const barX = W / 2 - barW / 2;
     const barY = H * 0.72;
 
+    // Bar track
     this.add.rectangle(W / 2, barY + barH / 2, barW + 2, barH + 2, 0x111830);
+
+    // Bar fill
     const bar    = this.add.rectangle(barX, barY + barH / 2, 2, barH, 0xff6b35).setOrigin(0, 0.5);
     const barDot = this.add.circle(barX + 2, barY + barH / 2, 5, 0xff9955, 1);
 
@@ -44,28 +48,35 @@ export class BootScene extends Phaser.Scene {
       onUpdate: () => { barDot.x = barX + bar.width; }
     });
 
+    // ── PERCENTAGE TEXT ───────────────────────────────────────────────────
     const pctText = this.add.text(W / 2 + barW / 2, barY - 14, '0%', {
       fontFamily: '"Courier New", monospace',
-      fontSize: `${Math.min(S * 0.028, 12)}px`,
-      color: '#ff6b35',
+      fontSize: `${Math.min(S * 0.032, 13)}px`,
+      color: '#ff9955',
     }).setOrigin(1, 1);
 
     this.tweens.add({
       targets: { v: 0 }, v: 100, duration: 900, ease: 'Power2',
       onUpdate: (tw, t) => { pctText.setText(Math.floor(t.v) + '%'); },
-      onComplete: () => { bar.setFillStyle(0x00e8c0); pctText.setText('100%'); }
+      onComplete: () => { bar.setFillStyle(0x00e8c0); pctText.setStyle({ color: '#00e8c0' }); pctText.setText('100%'); }
     });
 
-    const loadLabel = this.add.text(W / 2, barY + 20, 'LOADING', {
+    // ── LOADING LABEL ─────────────────────────────────────────────────────
+    const loadLabel = this.add.text(W / 2, barY + 22, 'LOADING', {
       fontFamily: '"Courier New", monospace',
-      fontSize: `${Math.min(S * 0.030, 12)}px`,
-      color: '#2a4060', letterSpacing: 6
+      fontSize: `${Math.min(S * 0.032, 13)}px`,
+      color: '#8ab4d4',
+      letterSpacing: 6,
+      shadow: { color: '#2266aa', blur: 10, fill: true },
     }).setOrigin(0.5);
 
     let dotCount = 0;
     this.time.addEvent({
       delay: 280, repeat: 12,
-      callback: () => { loadLabel.setText('LOADING' + '.'.repeat(dotCount % 4)); dotCount++; }
+      callback: () => {
+        loadLabel.setText('LOADING' + '.'.repeat(dotCount % 4));
+        dotCount++;
+      }
     });
 
     generateAssets(this);

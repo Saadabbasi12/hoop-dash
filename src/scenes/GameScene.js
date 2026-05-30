@@ -27,6 +27,18 @@ const NET_DAMPING    = 0.82; // velocity damping per frame
 const NET_GRAVITY    = 180; // net node gravity (lighter than ball)
 const RIM_RADIUS     = 44;  // matches hoop texture arc radius
 
+// ── Player rank tiers — basket count thresholds ──────────────────────────────
+const RANK_TIERS = [
+  { baskets:   0, name: 'BALLER',    color: 0xFFCA4527, hex: '#ca4527', icon: '🏀' },
+  { baskets:  5, name: 'ROOKIE',    color: 0x00c896, hex: '#00c896', icon: '⭐' },
+  { baskets:  25, name: 'HOOPER',    color: 0x4895ef, hex: '#4895ef', icon: '🔥' },
+  { baskets:  45, name: 'SHARPSHOOTER', color: 0xf4a261, hex: '#f4a261', icon: '🏹' },
+  { baskets:  70, name: 'CLUTCH',    color: 0xe040fb, hex: '#e040fb', icon: '💜' },
+  { baskets: 100, name: 'ALL-STAR',  color: 0xffd700, hex: '#ffd700', icon: '🌟' },
+  { baskets: 150, name: 'MVP',       color: 0xff6b35, hex: '#ff6b35', icon: '👑' },
+  { baskets: 200, name: 'LEGEND',    color: 0xff2255, hex: '#ff2255', icon: '🏆' },
+];
+
 export class GameScene extends Phaser.Scene {
   constructor() { super({ key: 'GameScene' }); }
 
@@ -59,6 +71,14 @@ export class GameScene extends Phaser.Scene {
     // Ball-inside-net state
     this.ballInsideNet   = false;  // true while ball is visually passing through net
     this.netBallBasket   = null;   // which basket's net the ball is inside
+
+    // Player rank state
+    this.currentRankIdx = 0;
+
+    // Laser obstacle state
+    this.laserObstacle      = null;   // active laser object or null
+    this.nextLaserIn        = Phaser.Math.Between(2, 3); // spawn after this many baskets
+    this.laserBasketsCount  = 0;      // baskets scored since last laser cleared
 
     YTPlayables.loadData().then(d => {
       if (d?.bestScore) this.bestScore = d.bestScore;
@@ -419,6 +439,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.ballInFlight) { this.ballY += dy; this.ball.y = this.ballY; }
    
     this.scrollY += dy;
+    this._scrollLaser(dy);
   }
 
   _advanceBaskets() {
@@ -635,14 +656,14 @@ export class GameScene extends Phaser.Scene {
     const scorePillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0);
     scorePillG.fillStyle(0x060809, 0.95);
     scorePillG.fillRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
-    scorePillG.lineStyle(1.5, 0x40485a, 1);
-    scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
+  scorePillG.lineStyle(1.5, 0xb0ebf6, 1);
+    // scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
 
     const labelSize = Math.max(Math.min(S * 0.020, 8), 7);
     this.add.text(W / 2, scorePillY + 4, 'SCORE', {
       fontFamily: '"Courier New", monospace',
       fontSize: `${labelSize}px`,
-      color: '#dbedf1',
+      color: '#b0ebf6',
       letterSpacing: 3,
     }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
 
@@ -650,7 +671,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreText = this.add.text(W / 2, scorePillCY + 3, '0', {
       fontFamily: '"Arial Black", Impact, sans-serif',
       fontSize: `${numSize}px`,
-      color: '#dbedf1',
+      color: '#b0ebf6',
     }).setOrigin(0.5, 0.5).setDepth(D).setScrollFactor(0);
 
     const hSize   = Math.min(totalBarH * 0.52, 22);
@@ -676,10 +697,194 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(D).setAlpha(0).setScrollFactor(0);
 
     this.aimArrow = this.add.image(0, 0, 'arrow').setAlpha(0).setScale(0.65).setDepth(D - 1);
+
+    // ── RANK PILL — top right of HUD ──────────────────────────────────────
+    this._totalBarH = totalBarH;
+    this._rankD     = D;
+    this._buildRankPill();
+  }
+
+  // ── RANK SYSTEM ──────────────────────────────────────────────────────────
+
+  _getCurrentRank() {
+    let rank = RANK_TIERS[0];
+    for (const tier of RANK_TIERS) {
+      if (this.totalBaskets >= tier.baskets) rank = tier;
+      else break;
+    }
+    return rank;
+  }
+
+  _buildRankPill() {
+    const { W }   = this;
+    const barH    = this._totalBarH;
+    const D       = this._rankD;
+    const S       = Math.min(W, this.H);
+
+    // ── Sizing — all clamped so nothing overflows on 320px portrait screens ─
+    const pillH   = Phaser.Math.Clamp(barH * 0.64, 18, 38);
+    const pillR   = pillH / 2;
+    const marginR = Math.max(W * 0.022, 6);
+
+    // Max width the rank pill is allowed to occupy (right side of HUD)
+    // Hearts sit on the left (~30% of W), score pill in centre (~34%).
+    // Give rank the remaining right slice, capped so it never touches centre.
+    const scorePillHalfW = Math.min(W * 0.17, 70);
+    const maxPillW = W / 2 - scorePillHalfW - marginR - 4;
+
+    // Font sizes — responsive + hard floor so text is always readable
+    const nameSize  = Phaser.Math.Clamp(S * 0.026, 8, 11);
+    const iconSize  = Phaser.Math.Clamp(S * 0.028, 9, 13);
+
+    const rank = RANK_TIERS[this.currentRankIdx];
+
+    this._rankPillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0);
+
+    const pillCY = barH / 2;
+    this._rankIcon = this.add.text(0, pillCY, rank.icon, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize:   `${iconSize}px`,
+    }).setOrigin(0, 0.5).setDepth(D).setScrollFactor(0);
+
+    this._rankName = this.add.text(0, pillCY, rank.name, {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize:   `${nameSize}px`,
+      color:      rank.hex,
+    }).setOrigin(0, 0.5).setDepth(D).setScrollFactor(0);
+
+    // Store all sizing constants for redraws
+    this._rankPillH   = pillH;
+    this._rankPillR   = pillR;
+    this._rankMarginR = marginR;
+    this._rankMaxW    = maxPillW;
+    this._rankIconSz  = iconSize;
+    this._rankNameSz  = nameSize;
+
+    this._redrawRankPill(rank, false);
+  }
+
+  _redrawRankPill(rank, animate = true) {
+    const { W }   = this;
+    const barH    = this._totalBarH;
+    const pillH   = this._rankPillH;
+    const pillR   = this._rankPillR;
+    const marginR = this._rankMarginR;
+    const maxW    = this._rankMaxW;
+    const D       = this._rankD;
+    const pillCY  = barH / 2;
+
+    this._rankName.setText(rank.name);
+    this._rankIcon.setText(rank.icon);
+
+    // Inner padding scales with pill height
+    const padX  = pillH * 0.45;
+    const gap   = pillH * 0.22;
+    const iconW = this._rankIcon.width;
+    const nameW = this._rankName.width;
+
+    // If full pill (icon + name) fits inside maxW → show both
+    // Otherwise icon-only pill (always fits)
+    const fullW = padX * 2 + iconW + gap + nameW;
+    const showName = fullW <= maxW;
+
+    let pillW, contentX;
+    if (showName) {
+      pillW    = fullW;
+      contentX = W - marginR - pillW + padX;
+      this._rankName.setVisible(true);
+      this._rankName.setStyle({ color: rank.hex });
+    } else {
+      // Icon-only mode — square-ish pill
+      pillW    = padX * 2 + iconW;
+      contentX = W - marginR - pillW + padX;
+      this._rankName.setVisible(false);
+    }
+
+    const pillX = W - marginR - pillW;
+
+    this._rankIcon.setPosition(contentX, pillCY);
+    if (showName) {
+      this._rankName.setPosition(contentX + iconW + gap, pillCY);
+    }
+
+    // ── Draw pill ──────────────────────────────────────────────────────────
+    const g = this._rankPillG;
+    g.clear();
+
+    // Outer glow ring
+    g.lineStyle(3, rank.color, 0.20);
+    g.strokeRoundedRect(pillX - 2, pillCY - pillH / 2 - 2, pillW + 4, pillH + 4, pillR + 2);
+
+    // Dark fill
+    g.fillStyle(0x06080c, 0.94);
+    g.fillRoundedRect(pillX, pillCY - pillH / 2, pillW, pillH, pillR);
+
+    // Colored border
+    g.lineStyle(1.5, rank.color, 0.90);
+    g.strokeRoundedRect(pillX, pillCY - pillH / 2, pillW, pillH, pillR);
+
+    // Top shine
+    g.fillStyle(0xffffff, 0.07);
+    g.fillRoundedRect(pillX + 2, pillCY - pillH / 2 + 2, pillW - 4, pillH * 0.36,
+      { tl: pillR, tr: pillR, bl: 0, br: 0 });
+
+    if (animate) {
+      [this._rankPillG, this._rankIcon, this._rankName].forEach(obj => {
+        obj.setAlpha(0);
+        this.tweens.add({
+          targets: obj, alpha: 1,
+          scaleX: { from: 1.2, to: 1 }, scaleY: { from: 1.2, to: 1 },
+          duration: 300, ease: 'Back.easeOut'
+        });
+      });
+    }
+  }
+
+  _updateRank() {
+    const newIdx = RANK_TIERS.reduce((best, tier, i) =>
+      this.totalBaskets >= tier.baskets ? i : best, 0);
+
+    if (newIdx <= this.currentRankIdx) return;
+    this.currentRankIdx = newIdx;
+    const rank = RANK_TIERS[newIdx];
+
+    this._redrawRankPill(rank, true);
+
+    // Big rank-up announcement
+    const S    = Math.min(this.W, this.H);
+    const popY = this._totalBarH + S * 0.12;
+    const line1 = this.add.text(this.W / 2, popY, `${rank.icon} RANK UP!`, {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize:   `${Math.min(S * 0.075, 34)}px`,
+      color:      rank.hex,
+      stroke:     '#000000', strokeThickness: 5,
+      shadow:     { color: rank.hex, blur: 20, fill: true },
+    }).setOrigin(0.5).setDepth(60).setAlpha(0);
+
+    const line2 = this.add.text(this.W / 2, popY + Math.min(S * 0.085, 38), rank.name, {
+      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontSize:   `${Math.min(S * 0.058, 26)}px`,
+      color:      '#ffffff',
+      stroke:     '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(60).setAlpha(0);
+
+    this.tweens.add({ targets: line1, alpha: 1, y: popY - 10, duration: 280, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: line2, alpha: 1, duration: 280, delay: 80, ease: 'Cubic.easeOut',
+      onComplete: () => {
+        this.time.delayedCall(1100, () => {
+          this.tweens.add({ targets: [line1, line2], alpha: 0, y: `-=22`, duration: 380, ease: 'Power2',
+            onComplete: () => { line1.destroy(); line2.destroy(); }
+          });
+        });
+      }
+    });
+
+    // Burst particles in rank color
+    this._burst(this.W / 2, popY, rank.color, 18);
   }
 
   // ── GLASS HEART DRAW HELPER ───────────────────────────────────────────────
-  _drawGlassHeart(g, cx, cy, size, active) {
+ _drawGlassHeart(g, cx, cy, size, active) {
     const s = size * 0.5;
 
     const pts = [];
@@ -697,31 +902,40 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (active) {
+      // Shadow (Unchanged)
       g.fillStyle(0x000000, 0.45);
       const shadowPts = pts.map(p => ({ x: p.x + 1.5, y: p.y + 2 }));
       g.fillPoints(shadowPts, true);
 
-      g.fillStyle(0xc0112a, 1);
+      // --- NEW SHARP SHOOTER COLOR SCHEME (ca4527) ---
+      
+      // 1. Base Layer (Darker rust tone for depth)
+      g.fillStyle(0x9E2A11, 1); 
       g.fillPoints(pts, true);
 
-      g.fillStyle(0xe8193a, 1);
+      // 2. Mid Layer (Aapka exact requested color: ca4527)
+      g.fillStyle(0xCA4527, 1); 
       const midPts = pts.map(p => ({ x: cx + (p.x - cx) * 0.82, y: cy + (p.y - cy) * 0.82 }));
       g.fillPoints(midPts, true);
 
-      g.fillStyle(0xff3355, 1);
+      // 3. Core Layer (Brighter orange highlight for the inner glow)
+      g.fillStyle(0xFA6341, 1); 
       const corePts = pts.map(p => ({ x: cx + (p.x - cx) * 0.55, y: cy + (p.y - cy) * 0.55 }));
       g.fillPoints(corePts, true);
 
+      // 4. Glass Reflections (White highlights kept for shiny effect)
       g.fillStyle(0xffffff, 0.70);
       g.fillEllipse(cx - s * 0.22, cy - s * 0.28, s * 0.50, s * 0.28);
 
       g.fillStyle(0xffffff, 0.95);
       g.fillCircle(cx - s * 0.28, cy - s * 0.32, s * 0.10);
 
-      g.lineStyle(1.5, 0xff6688, 0.55);
+      // 5. Outer Outline/Stroke (Matching bright border)
+      g.lineStyle(1.5, 0xFF7D5C, 0.55); 
       g.strokePoints(pts, true);
 
     } else {
+      // Inactive State (Deactivated gray/dark heart remains unchanged)
       g.fillStyle(0x1e2430, 1);
       g.fillPoints(pts, true);
 
@@ -735,7 +949,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xffffff, 0.08);
       g.fillEllipse(cx - s * 0.18, cy - s * 0.26, s * 0.42, s * 0.22);
     }
-  }
+}
 
   _refreshHearts() {
     if (this.heartGraphics) {
@@ -938,6 +1152,7 @@ export class GameScene extends Phaser.Scene {
     this.difficulty  = 1 + Math.floor(this.score / 5);
 
     this._updateScoreUI();
+    this._updateRank();
     soundManager.playScore();
 
     if (this.combo > 1) {
@@ -957,9 +1172,24 @@ export class GameScene extends Phaser.Scene {
     if (this.score > this.bestScore) this.bestScore = this.score;
     YTPlayables.sendScore(this.score);
 
+    // ── Laser: clear any current laser on score, then count toward next spawn ─
+    if (this.laserObstacle) {
+      this._clearLaser(true);
+    } else {
+      this.laserBasketsCount++;
+      if (this.laserBasketsCount >= this.nextLaserIn) {
+        // Spawn laser AFTER baskets advance so the Y midpoint is accurate
+        this._pendingLaserSpawn = true;
+      }
+    }
+
     this._animateBallThroughBasket(this.targetBasket, () => {
       if (!this.isGameOver) {
         this._advanceBaskets();
+        if (this._pendingLaserSpawn) {
+          this._pendingLaserSpawn = false;
+          this.time.delayedCall(300, () => { if (!this.isGameOver) this._spawnLaser(); });
+        }
         this.time.delayedCall(120, () => { if (!this.isGameOver) this._resetBall(); });
       }
     });
@@ -1141,6 +1371,10 @@ export class GameScene extends Phaser.Scene {
       this._drawNet(this.targetBasket,  0xff7a20, 0.92);
     }
 
+    // ── Laser obstacle — draw + collision ──────────────────────────────────
+    this._drawLaser();
+    this._checkLaserHit();
+
     // ── Ball physics ───────────────────────────────────────────────────────
     if (this.ballInFlight) {
       this.ballVY += GRAVITY * dt;
@@ -1226,9 +1460,182 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  //  LASER OBSTACLE SYSTEM
+  // ══════════════════════════════════════════════════════════════════════════
+
+  _spawnLaser() {
+    if (this.laserObstacle) return;
+
+    const cur    = this.currentBasket;
+    const tgt    = this.targetBasket;
+    const laserY = cur.y + (tgt.y - cur.y) * 0.52;
+    const lx1    = this.leftWallX  ?? 0;
+    const lx2    = this.rightWallX ?? this.W;
+
+    const glow   = this.add.graphics().setDepth(15);
+    const beam   = this.add.graphics().setDepth(16);
+    const center = this.add.graphics().setDepth(17);
+
+    this.laserObstacle = {
+      glow, beam, center,
+      warnText: null,
+      y: laserY, x1: lx1, x2: lx2,
+      hitCooldown: 0,
+      beamVisible: true,
+      beamOn: true,
+      onDuration:  800,   // ms beam stays ON
+      offDuration: 700,   // ms beam stays OFF — safe window to cross
+      blinkTimer:  0,
+    };
+  }
+
+  _drawLaser() {
+    const L = this.laserObstacle;
+    if (!L || !L.beamOn) return;
+
+    // Advance blink timer using Phaser loop delta
+    const dt = this.game.loop.delta;
+    L.blinkTimer += dt;
+    const phase = L.beamVisible ? L.onDuration : L.offDuration;
+    if (L.blinkTimer >= phase) {
+      L.blinkTimer  = 0;
+      L.beamVisible = !L.beamVisible;
+    }
+
+    const { glow, beam, center, y, x1, x2 } = L;
+    glow.clear(); beam.clear(); center.clear();
+
+    // Beam is OFF — nothing drawn, collision also disabled (see _checkLaserHit)
+    if (!L.beamVisible) return;
+
+    // Outer soft glow
+    glow.lineStyle(16, 0xff0044, 0.09);
+    glow.lineBetween(x1, y, x2, y);
+    glow.lineStyle(9, 0xff0044, 0.20);
+    glow.lineBetween(x1, y, x2, y);
+
+    // Mid beam
+    beam.lineStyle(4.5, 0xff2255, 0.80);
+    beam.lineBetween(x1, y, x2, y);
+
+    // Hot white core
+    center.lineStyle(1.5, 0xffffff, 1.0);
+    center.lineBetween(x1, y, x2, y);
+
+    // End-cap ticks
+    const capH = 8;
+    [x1, x2].forEach(cx => {
+      center.lineStyle(2.5, 0xff2255, 1.0);
+      center.lineBetween(cx, y - capH, cx, y + capH);
+    });
+  }
+
+  /** Check ball-laser collision each frame */
+  _checkLaserHit() {
+    const L = this.laserObstacle;
+    if (!L || !L.beamOn || !L.beamVisible || !this.ballInFlight) return;
+    if (L.hitCooldown > 0) { L.hitCooldown -= 1; return; }
+
+    const ballR = 22 * this.ballScale;
+    const dist  = Math.abs(this.ballY - L.y);
+
+    if (dist < ballR + 5 && this.ballX >= L.x1 && this.ballX <= L.x2) {
+      // Bounce ball away from laser
+      this.ballVY = -Math.abs(this.ballVY) * 0.55;
+      this.ballVX *= 0.75;
+      this.ballY   = L.y - ballR - 6;
+
+      L.hitCooldown = 30; // ~0.5s cooldown
+
+      // Flash the laser red-white
+      this._laserHitFlash();
+
+      // Lose a life
+      this.combo = 0;
+      this.comboTimer = 0;
+      this.comboText.setAlpha(0);
+      this.lives--;
+      this._refreshHearts();
+      soundManager.playMiss();
+      this.cameras.main.shake(100, 0.014);
+
+      if (this.lives <= 0) {
+        this.ballInFlight = false;
+        this._gameOver();
+      }
+    }
+  }
+
+  _laserHitFlash() {
+    const L = this.laserObstacle;
+    if (!L) return;
+
+    // Screen flash
+    const flash = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0xff0033, 0.28).setDepth(50);
+    this.tweens.add({ targets: flash, alpha: 0, duration: 200, onComplete: () => flash.destroy() });
+
+    // Spark burst at impact point
+    for (let i = 0; i < 10; i++) {
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const spd   = Phaser.Math.FloatBetween(40, 110);
+      const p     = this.add.circle(this.ballX, L.y, Phaser.Math.FloatBetween(2, 5), 0xff3366, 1).setDepth(22);
+      this.tweens.add({
+        targets: p,
+        x: this.ballX + Math.cos(angle) * spd,
+        y: L.y       + Math.sin(angle) * spd,
+        alpha: 0, scaleX: 0.1, scaleY: 0.1,
+        duration: Phaser.Math.Between(220, 450), ease: 'Power2',
+        onComplete: () => p.destroy()
+      });
+    }
+
+    this._scoreTextPop(this.ballX, L.y - 30, '⚡ ZAP!', '#ff2255');
+  }
+
+  /** Remove the active laser (called on score, or when world scrolls past it) */
+  _clearLaser(animate = true) {
+    const L = this.laserObstacle;
+    if (!L) return;
+    this.laserObstacle = null;
+
+    const destroy = () => {
+      L.glow.destroy();
+      L.beam.destroy();
+      L.center.destroy();
+      if (L.warnText) L.warnText.destroy();
+    };
+
+    if (animate) {
+      if (L.warnText) this.tweens.add({ targets: L.warnText, alpha: 0, duration: 180 });
+      this.tweens.add({
+        targets: { t: 0 }, t: 1, duration: 220,
+        onUpdate: () => { L.glow.clear(); L.beam.clear(); L.center.clear(); },
+        onComplete: destroy
+      });
+    } else {
+      destroy();
+    }
+
+    // Schedule next laser: 2 or 3 baskets from now
+    this.laserBasketsCount = 0;
+    this.nextLaserIn = Phaser.Math.Between(2, 3);
+  }
+
+  /** Move the laser down when the world scrolls */
+  _scrollLaser(dy) {
+    const L = this.laserObstacle;
+    if (!L) return;
+    L.y += dy;
+    if (L.warnText) L.warnText.y += dy;
+    // If laser has scrolled below the screen, remove it silently
+    if (L.y > this.H + 40) this._clearLaser(false);
+  }
+
   // ── SHUTDOWN ──────────────────────────────────────────────────────────────
   shutdown() {
     clearInterval(this.ambientInterval);
+    if (this.laserObstacle) this._clearLaser(false);
     this.scale.off('resize', this._onResize, this);
     this.input.off('pointerdown', this._onPointerDown, this);
     this.input.off('pointermove', this._onPointerMove, this);
