@@ -659,21 +659,26 @@ export class GameScene extends Phaser.Scene {
   scorePillG.lineStyle(1.5, 0xb0ebf6, 1);
     // scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
 
-    const labelSize = Math.max(Math.min(S * 0.020, 8), 7);
+    const labelSize = Math.max(Math.min(S * 0.032, 10), 11);
     this.add.text(W / 2, scorePillY + 4, 'SCORE', {
       fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${labelSize}px`,
-      fontStyle: 'bold', 
+      // fontStyle: 'bold', 
       color: '#b0ebf6',
-      letterSpacing: 5,
+      letterSpacing: 3,
     }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
 
-    const numSize = Math.min(fs(0.042, 16), scorePillH * 0.40);
-    this.scoreText = this.add.text(W / 2, scorePillCY + 3, '0', {
-     fontFamily: '"Bebas Neue", Impact, sans-serif',
-      fontSize: `${numSize}px`,
-      color: '#b0ebf6',
-    }).setOrigin(0.5, 0.5).setDepth(D).setScrollFactor(0);
+   const numSize = Math.min(fs(0.045, 17), scorePillH * 0.55);
+
+this.scoreText = this.add.text(W / 2, scorePillCY + 7, '0', {
+  fontFamily: '"Bebas Neue", Impact, sans-serif',
+  fontSize: `${numSize}px`,
+  color: '#ffffff',
+ 
+})
+.setOrigin(0.5, 0.5)
+.setDepth(D)
+.setScrollFactor(0);
 
     const hSize   = Math.min(totalBarH * 0.52, 22);
     const hGap    = hSize * 0.55;
