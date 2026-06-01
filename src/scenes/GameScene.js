@@ -145,56 +145,96 @@ export class GameScene extends Phaser.Scene {
   /**
    * Draw a tiled brick wall — cool dark grey-blue palette, crisp mortar.
    */
-  _drawBrickWall(g, x, y, w, h, flipOffset = false) {
-    const bW   = Math.round(w * 0.6);
-    const bH   = Math.round(w * 0.36);
-    const rows = Math.ceil(h / bH) + 2;
+ _drawBrickWall(g, x, y, w, h, flipOffset = false) {
+  // Ensure the main bounding box sits perfectly on whole pixels
+  x = Math.round(x);
+  y = Math.round(y);
+  w = Math.round(w);
+  h = Math.round(h);
 
-    // ── WALL BASE — very dark cool grey-blue, NOT brown ──────────────────────
-    g.fillStyle(0x0c0e12, 1);
-    g.fillRect(x, y, w, h);
+  const bW   = Math.round(w * 0.6);
+  const bH   = Math.round(w * 0.36);
+  const rows = Math.ceil(h / bH) + 2;
 
-    for (let r = 0; r < rows; r++) {
-      const bY      = y + r * bH;
-      const offX    = (r % 2 === (flipOffset ? 0 : 1)) ? Math.round(bW * 0.5) : 0;
+  // ── PREMIUM BASE (clean dark slate, not flat black) ────────────────
+  g.fillStyle(0x121826, 1);
+  g.fillRect(x, y, w, h);
 
-      const v       = 42 + ((r * 6 + (flipOffset ? 2 : 0)) % 18);
-      const brickR  = v;
-      const brickG  = v + 3;
-      const brickB  = v + 7;
-      const brickCol = (brickR << 16) | (brickG << 8) | brickB;
+  for (let r = 0; r < rows; r++) {
+    // Snap row Y coordinate tightly to an integer
+    const bY   = Math.round(y + r * bH);
+    
+    // Bounds check to stop drawing rows completely outside the height
+    if (bY >= y + h) break; 
 
-      for (let bx = x - bW + offX; bx < x + w; bx += bW) {
-        const bLeft  = Math.max(bx,      x);
-        const bRight = Math.min(bx + bW - 2, x + w - 1);
-        if (bRight <= bLeft) continue;
-        const bw = bRight - bLeft;
+    const offX = (r % 2 === (flipOffset ? 0 : 1))
+      ? Math.round(bW * 0.5)
+      : 0;
 
-        g.fillStyle(brickCol, 1);
-        g.fillRect(bLeft, bY + 1, bw, bH - 2);
+    // ── smoother high-end brick variation (no harsh jumps) ──────────
+    const base = 105 + ((r * 7 + (flipOffset ? 3 : 0)) % 18);
 
-        g.lineStyle(1, 0x606878, 1);
-        g.lineBetween(bLeft, bY + 1, bLeft + bw - 1, bY + 1);
+    const brickR = base + 8;
+    const brickG = base + 10;
+    const brickB = base + 14;
 
-        g.lineStyle(1, 0x0a0c14, 1);
-        g.lineBetween(bLeft, bY + bH - 2, bLeft + bw - 1, bY + bH - 2);
+    const brickCol = (brickR << 16) | (brickG << 8) | brickB;
 
-        g.lineStyle(1, 0x181c24, 0.9);
-        g.lineBetween(bLeft, bY + 1, bLeft, bY + bH - 2);
-      }
+    for (let bx = x - bW + offX; bx < x + w; bx += bW) {
+      // Keep structural boundaries perfectly integer-snapped
+      let bLeft  = Math.round(Math.max(bx, x));
+      let bRight = Math.round(Math.min(bx + bW - 2, x + w));
+      if (bRight <= bLeft) continue;
 
-      g.lineStyle(1, 0x040608, 1);
-      g.lineBetween(x, bY, x + w, bY);
+      let bw = bRight - bLeft;
+
+      // ── MAIN BRICK FACE ───────────────────────────────────────────
+      // Shifting Y by 1 down and padding height preserves crisp integer bounds
+      g.fillStyle(brickCol, 1);
+      g.fillRect(bLeft, bY + 1, bw, bH - 2);
+
+      // ── PREMIUM LIGHT TOP BEVEL (soft highlight) ──────────────────
+      g.fillStyle(0xffffff, 0.06);
+      g.fillRect(bLeft, bY + 1, bw, 2);
+
+      // ── SOFT INNER SHADOW (gives depth, not harsh lines) ──────────
+      g.fillStyle(0x000000, 0.12);
+      g.fillRect(bLeft, bY + bH - 3, bw, 2);
+
+      // ── PIXEL-CRISP EDGES (Using fillRect instead of lineBetween) ─
+      // fillRect uses exact pixel coordinates, avoiding the 0.5px line-straddle blur.
+      
+      // Left Edge (subtle light hit)
+      g.fillStyle(0xd6e2ff, 0.18);
+      g.fillRect(bLeft, bY + 1, 1, bH - 2);
+
+      // Right Edge (depth cut) - placed precisely inside the brick edge
+      g.fillStyle(0x0a0f18, 0.9);
+      g.fillRect(bLeft + bw - 1, bY + 1, 1, bH - 2);
     }
 
-    if (!flipOffset) {
-      g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0.55, 0, 0.55);
-      g.fillRect(x + w - 6, y, 6, h);
-    } else {
-      g.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.55, 0, 0.55, 0);
-      g.fillRect(x, y, 6, h);
-    }
+    // ── CLEAN ROW SEPARATION ─────────────────────────────────────────
+    // Replaced lineBetween with a 1px tall fillRect to keep the mortar razor-sharp
+    g.fillStyle(0x0a0f16, 0.5);
+    g.fillRect(x, bY, w, 1);
   }
+
+  // ── PREMIUM VIGNETTE (very subtle depth like AAA games) ─────────────
+  // Enforcing whole pixel coordinates here ensures the gradient cuts off cleanly
+  if (!flipOffset) {
+    g.fillGradientStyle(
+      0x000000, 0x000000, 0x000000, 0x000000,
+      0, 0.25, 0, 0.25
+    );
+    g.fillRect(Math.round(x + w - 10), y, 10, h);
+  } else {
+    g.fillGradientStyle(
+      0x000000, 0x000000, 0x000000, 0x000000,
+      0.25, 0, 0.25, 0
+    );
+    g.fillRect(x, y, 10, h);
+  }
+}
 
   // ══════════════════════════════════════════════════════════════════════════
   //  SPRING NET SYSTEM
@@ -623,92 +663,132 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── UI ────────────────────────────────────────────────────────────────────
-  _createUI() {
-    const { W, H } = this;
-    const D  = 50;
-    const S  = Math.min(W, H);
-    const fs = this._fs.bind(this);
+_createUI() {
+  const { W, H } = this;
+  const D  = 50;
+  const S  = Math.min(W, H);
+  const fs = this._fs.bind(this);
 
-    const barH      = Math.min(H * 0.072, 52);
-    const totalBarH = barH + 10;
-    const barPad    = 5;
+  // Force all HUD dimensions to absolute, crisp integers
+  const barH      = Math.round(Math.min(H * 0.072, 52));
+  const totalBarH = Math.round(barH + 10);
+  const barPad    = 5;
 
-    const hudBase = this.add.graphics().setDepth(D - 3).setScrollFactor(0);
-    hudBase.fillStyle(0x0c0e12, 1);
-    hudBase.fillRect(0, 0, W, totalBarH);
+  const roundedW  = Math.round(W);
 
-    const hudShine = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
-    hudShine.fillGradientStyle(0x20252e, 0x20252e, 0x0c0e12, 0x0c0e12, 1, 1, 0, 0);
-    hudShine.fillRect(0, 0, W, totalBarH);
+  // ── 1. METALLIC BASE (Perfect integer boundaries) ─────────────────
+  const hudBase = this.add.graphics().setDepth(D - 3).setScrollFactor(0);
+  hudBase.fillGradientStyle(0x242e42, 0x242e42, 0x161d29, 0x161d29, 1, 1, 1, 1);
+  hudBase.fillRect(0, 0, roundedW, totalBarH);
 
-    const hudBorder = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
-    hudBorder.lineStyle(3, 0x2a3040, 0.6);
-    hudBorder.lineBetween(0, totalBarH + 1, W, totalBarH + 1);
-    hudBorder.lineStyle(1, 0x40485a, 1);
-    hudBorder.lineBetween(0, totalBarH, W, totalBarH);
+  // ── 2. HIGH-END TOP SHINE OVERLAY ──────────────────────────────────
+  const hudShine = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
+  hudShine.fillRect(0, 0, roundedW, totalBarH);
 
-    const scorePillW  = Math.min(W * 0.34, 140);
-    const scorePillH  = totalBarH * 0.80;
-    const scorePillY  = (totalBarH - scorePillH) / 2;
-    const scorePillCY = scorePillY + scorePillH / 2;
-    const scorePillR  = scorePillH / 2;
+  // 1px flat fill rectangle replaces lineBetween to avoid sub-pixel line blurring
+  hudShine.fillStyle(0xffffff, 0.25);
+  hudShine.fillRect(0, 0, roundedW, 1);
 
-    const scorePillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0);
-    scorePillG.fillStyle(0x060809, 0.95);
-    scorePillG.fillRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
-  scorePillG.lineStyle(1.5, 0xb0ebf6, 1);
-    // scorePillG.strokeRoundedRect(W / 2 - scorePillW / 2, scorePillY, scorePillW, scorePillH, scorePillR);
+  // ── 3. CHROME PINSTRIPE BOTTOM BORDERS ─────────────────────────────
+  const hudBorder = this.add.graphics().setDepth(D - 2).setScrollFactor(0);
+  
+  // Upper 1px crisp glass edge accent
+  hudBorder.fillStyle(0xe2ecfc, 0.6);
+  hudBorder.fillRect(0, totalBarH - 2, roundedW, 1);
+  
+  // Lower 1px grounding shadow row
+  hudBorder.fillStyle(0x0c111a, 0.7);
+  hudBorder.fillRect(0, totalBarH - 1, roundedW, 1);
 
-    const labelSize = Math.max(Math.min(S * 0.032, 10), 11);
-    this.add.text(W / 2, scorePillY + 4, 'SCORE', {
-      fontFamily: '"Bebas Neue", Impact, sans-serif',
-      fontSize: `${labelSize}px`,
-      // fontStyle: 'bold', 
-      color: '#b0ebf6',
-      letterSpacing: 3,
-    }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
+  // ── 4. SOFT DROP SHADOW ────────────────────────────────────────────
+  const hudShadow = this.add.graphics().setDepth(D - 4).setScrollFactor(0);
+  hudShadow.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.4, 0.4, 0.0, 0.0);
+  hudShadow.fillRect(0, totalBarH, roundedW, 12);
 
-   const numSize = Math.min(fs(0.045, 17), scorePillH * 0.55);
+  // ── 5. ULTRA-CRISP BLACK GLASS (OBSIDIAN) SCORE PILL ───────────────
+  // All internal pill layout variables explicitly rounded to avoid float values
+  const scorePillW  = Math.round(Math.min(W * 0.34, 140));
+  const scorePillH  = Math.round(totalBarH * 0.80);
+  const scorePillX  = Math.round(W / 2 - scorePillW / 2);
+  const scorePillY  = Math.round((totalBarH - scorePillH) / 2);
+  const scorePillCY = Math.round(scorePillY + scorePillH / 2);
+  const scorePillR  = Math.round(scorePillH / 2);
 
-this.scoreText = this.add.text(W / 2, scorePillCY + 7, '0', {
-  fontFamily: '"Bebas Neue", Impact, sans-serif',
-  fontSize: `${numSize}px`,
-  color: '#ffffff',
- 
-})
-.setOrigin(0.5, 0.5)
-.setDepth(D)
-.setScrollFactor(0);
+  const scorePillG = this.add.graphics().setDepth(D - 1).setScrollFactor(0);
+  
+  // A. Deep Black Obsidian Glass Base
+  scorePillG.fillGradientStyle(0x111116, 0x111116, 0x020204, 0x020204, 0.95, 0.95, 0.98, 0.98);
+  scorePillG.fillRoundedRect(scorePillX, scorePillY, scorePillW, scorePillH, scorePillR);
 
-    const hSize   = Math.min(totalBarH * 0.52, 22);
-    const hGap    = hSize * 0.55;
-    const hStartX = Math.max(W * 0.022, 10);
-    const hCY     = totalBarH / 2;
+  // B. Inner Silver-White Specular Edge (Snapped 1px inside outer bound)
+  scorePillG.lineStyle(1, 0xffffff, 0.22);
+  scorePillG.strokeRoundedRect(scorePillX + 1, scorePillY + 1, scorePillW - 2, scorePillH - 2, scorePillR - 1);
 
-    this._livesHSize   = hSize;
-    this._livesHGap    = hGap;
-    this._livesHStartX = hStartX;
-    this._livesHCY     = hCY;
-    this._livesD       = D;
-    this.heartGraphics = [];
+  // C. Upper Frosted High-Gloss Reflection
+  scorePillG.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.16, 0.16, 0.0, 0.0);
+  scorePillG.fillRoundedRect(scorePillX + 1, scorePillY + 1, scorePillW - 2, Math.round(scorePillH / 2), {
+    tl: scorePillR - 1,
+    tr: scorePillR - 1,
+    bl: 0,
+    br: 0
+  });
 
-    this._refreshHearts();
+  // D. Grounding Outer Shadow Ring
+  scorePillG.lineStyle(1, 0x000000, 0.75);
+  scorePillG.strokeRoundedRect(scorePillX, scorePillY, scorePillW, scorePillH, scorePillR);
 
-    this.comboText = this.add.text(W / 2, totalBarH + 8, '', {
+  // ── 6. TEXT RENDERING AND CRISP PIXEL ALIGNMENT ────────────────────
+  const labelSize = Math.round(Math.max(Math.min(S * 0.032, 10), 11));
+  
+  this.add.text(W / 2, Math.round(scorePillY + 3), 'SCORE', {
     fontFamily: '"Bebas Neue", Impact, sans-serif',
-      fontSize: `${fs(0.052, 22)}px`,
-      color: '#ffd700',
-      stroke: '#7a4400', strokeThickness: 3,
-      shadow: { color: '#ffaa00', blur: 18, fill: true }
-    }).setOrigin(0.5).setDepth(D).setAlpha(0).setScrollFactor(0);
+    fontSize: `${labelSize}px`,
+    color: '#eaedf4',
+    letterSpacing: 3,
+  }).setOrigin(0.5, 0).setDepth(D).setScrollFactor(0);
 
-    this.aimArrow = this.add.image(0, 0, 'arrow').setAlpha(0).setScale(0.65).setDepth(D - 1);
+  const numSize = Math.round(Math.min(fs(0.045, 17), scorePillH * 0.55));
 
-    // ── RANK PILL — top right of HUD ──────────────────────────────────────
-    this._totalBarH = totalBarH;
-    this._rankD     = D;
-    this._buildRankPill();
-  }
+  this.scoreText = this.add.text(W / 2, Math.round(scorePillCY + 6), '0', {
+    fontFamily: '"Bebas Neue", Impact, sans-serif',
+    fontSize: `${numSize}px`,
+    color: '#ffffff',
+  })
+  .setOrigin(0.5, 0.5)
+  .setDepth(D)
+  .setScrollFactor(0);
+
+  // ── 7. LIVES AND ASSET INITIALIZATION (Perfectly aligned centers) ──
+  const hSize   = Math.round(Math.min(totalBarH * 0.52, 22));
+  const hGap    = Math.round(hSize * 0.55);
+  const hStartX = Math.round(Math.max(W * 0.022, 10));
+  const hCY     = Math.round(totalBarH / 2);
+
+  this._livesHSize   = hSize;
+  this._livesHGap    = hGap;
+  this._livesHStartX = hStartX;
+  this._livesHCY     = hCY;
+  this._livesD       = D;
+  this.heartGraphics = [];
+
+  this._refreshHearts();
+
+  // Snapped combo text Y anchor position
+  this.comboText = this.add.text(W / 2, Math.round(totalBarH + 8), '', {
+    fontFamily: '"Bebas Neue", Impact, sans-serif',
+    fontSize: `${Math.round(fs(0.052, 22))}px`,
+    color: '#ffd700',
+    stroke: '#7a4400', strokeThickness: 3,
+    shadow: { color: '#ffaa00', blur: 18, fill: true }
+  }).setOrigin(0.5).setDepth(D).setAlpha(0).setScrollFactor(0);
+
+  this.aimArrow = this.add.image(0, 0, 'arrow').setAlpha(0).setScale(0.65).setDepth(D - 1);
+
+  // ── RANK PILL ──────────────────────────────────────────────────────
+  this._totalBarH = totalBarH;
+  this._rankD     = D;
+  this._buildRankPill();
+}
 
   // ── RANK SYSTEM ──────────────────────────────────────────────────────────
 
