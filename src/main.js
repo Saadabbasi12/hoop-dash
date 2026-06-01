@@ -32,7 +32,7 @@ const config = {
   },
   scene: [BootScene, MenuScene, GameScene, GameOverScene],
   input: { activePointers: 2 },
-  render: { antialias: true, pixelArt: false,  powerPreference: 'high-performance', roundPixels: false }
+  render: { antialias: true, pixelArt: false,  powerPreference: 'high-performance', roundPixels: false ,  resolution: window.devicePixelRatio || 1, }
 };
 
 function startGame() {
