@@ -71,7 +71,7 @@ export class GameOverScene extends Phaser.Scene {
     const titleSize = Math.min(S * 0.075, 38);
 
     const title = this.add.text(W / 2, titleY, titleTxt, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${titleSize}px`,
       color: titleCol,
     }).setOrigin(0.5).setAlpha(0);
@@ -82,13 +82,13 @@ export class GameOverScene extends Phaser.Scene {
     const scoreSize = Math.min(S * 0.15, 72);
 
     this.add.text(W / 2, scoreY - scoreSize * 0.55, 'SCORE', {
-      fontFamily: '"Courier New", monospace',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${labelSize}px`,
       color: '#2a4060', letterSpacing: 7
     }).setOrigin(0.5);
 
     const scoreNum = this.add.text(W / 2, scoreY + scoreSize * 0.15, this.finalScore.toString(), {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${scoreSize}px`,
       color: '#ffffff',
     }).setOrigin(0.5).setAlpha(0).setScale(0.5);
@@ -115,7 +115,7 @@ export class GameOverScene extends Phaser.Scene {
     playBg.strokeRoundedRect(W / 2 - btnW / 2, playBtnY - btnH / 2, btnW, btnH, btnR);
 
     const playTxt = this.add.text(W / 2, playBtnY, 'PLAY AGAIN', {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(S * 0.044, 18)}px`,
       color: '#ff6b35', letterSpacing: 6,
     }).setOrigin(0.5).setAlpha(0);
@@ -134,7 +134,7 @@ export class GameOverScene extends Phaser.Scene {
     menuBg.strokeRoundedRect(W / 2 - menuBtnW / 2, menuBtnY - menuBtnH / 2, menuBtnW, menuBtnH, btnR);
 
     const menuTxt = this.add.text(W / 2, menuBtnY, 'MENU', {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(S * 0.036, 15)}px`,
       color: '#ffffff', letterSpacing: 8,
     }).setOrigin(0.5).setAlpha(0);
@@ -200,14 +200,14 @@ export class GameOverScene extends Phaser.Scene {
     g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10);
 
     this.add.text(x, y - h * 0.20, label, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(S * 0.028, 12)}px`,
       color: '#ffffff',
       letterSpacing: 2,
     }).setOrigin(0.5).setAlpha(0.9);
 
     this.add.text(x, y + h * 0.20, value, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(S * 0.068, 28)}px`,
       color: hexColor,
     }).setOrigin(0.5);

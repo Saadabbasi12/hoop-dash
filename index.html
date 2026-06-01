@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Hoop Dash</title>
-
+<!-- Add this in <head>, before your styles -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
   <!--
     STEP 1: Load the YouTube Playables SDK synchronously (no defer, no async).
     This blocks parsing until ytgame is fully available.
@@ -36,6 +39,8 @@
       display: flex; align-items: center; justify-content: center;
     }
     canvas { display: block; max-width: 100%; max-height: 100%; }
+
+    
   </style>
 </head>
 <body>

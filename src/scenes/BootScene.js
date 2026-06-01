@@ -18,6 +18,11 @@ export class BootScene extends Phaser.Scene {
     this.load.on('filefailed-image-basketball_png',  () => { this._usePng = false; });
     this.load.image('basket_net', basketUrl);
     this.load.image('hoopdash_logo', hoopdashUrl);
+    const fontTest = this.add.text(-999, -999, 'X', {
+  fontFamily: '"Bebas Neue"',
+  fontSize: '32px'
+});
+this.time.delayedCall(100, () => fontTest.destroy());
 
     const W = this.scale.width;
     const H = this.scale.height;
@@ -50,7 +55,7 @@ export class BootScene extends Phaser.Scene {
 
     // ── PERCENTAGE TEXT ───────────────────────────────────────────────────
     const pctText = this.add.text(W / 2 + barW / 2, barY - 14, '0%', {
-      fontFamily: '"Courier New", monospace',
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(S * 0.032, 13)}px`,
       color: '#ff9955',
     }).setOrigin(1, 1);
@@ -63,7 +68,7 @@ export class BootScene extends Phaser.Scene {
 
     // ── LOADING LABEL ─────────────────────────────────────────────────────
     const loadLabel = this.add.text(W / 2, barY + 22, 'LOADING', {
-      fontFamily: '"Courier New", monospace',
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(S * 0.032, 13)}px`,
       color: '#8ab4d4',
       letterSpacing: 6,
@@ -96,7 +101,7 @@ export class BootScene extends Phaser.Scene {
     } else {
       const S = Math.min(W, H);
       this.add.text(W / 2, H * 0.40, '🏀 HOOP DASH', {
-        fontFamily: '"Arial Black", Impact, sans-serif',
+        fontFamily: '"Bebas Neue", Impact, sans-serif',
         fontSize: `${Math.min(S * 0.13, 52)}px`,
         color: '#ff6b35', stroke: '#7a2c00', strokeThickness: 4,
       }).setOrigin(0.5);

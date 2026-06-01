@@ -50,7 +50,7 @@ export class MenuScene extends Phaser.Scene {
       logoH = Math.min(S * 0.13, 52) * 1.4;
       const logoY = H * 0.025 + logoH / 2;
       const logo  = this.add.text(W / 2, logoY, '🏀 HOOP DASH', {
-        fontFamily: '"Arial Black", Impact, sans-serif',
+        fontFamily: '"Bebas Neue", Impact, sans-serif',
         fontSize: `${Math.min(S * 0.13, 52)}px`,
         color: '#ff6b35', stroke: '#7a2c00', strokeThickness: 4,
       }).setOrigin(0.5).setAlpha(0);
@@ -102,7 +102,7 @@ export class MenuScene extends Phaser.Scene {
     this.bestScorePill.strokeRoundedRect(W / 2 - pillW / 2, bestY - pillH / 2, pillW, pillH, pillH / 2);
 
     this.bestScoreText = this.add.text(W / 2, bestY, '', {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(otherSlotH * 0.30, S * 0.048, 20)}px`,
       color: '#d4a017', letterSpacing: 2,
     }).setOrigin(0.5).setAlpha(0);
@@ -122,7 +122,7 @@ export class MenuScene extends Phaser.Scene {
     btnBg.strokeRoundedRect(W / 2 - btnW / 2, btnY - btnH / 2, btnW, btnH, btnR);
 
     const btnTxt = this.add.text(W / 2, btnY, 'PLAY', {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(otherSlotH * 0.32, S * 0.060, 26)}px`,
       color: '#ffffff', letterSpacing: 10,
     }).setOrigin(0.5).setAlpha(0);
@@ -140,12 +140,12 @@ export class MenuScene extends Phaser.Scene {
     // ── HINT ──────────────────────────────────────────────────────────────
     this.add.text(W / 2, hintY, '  drag to aim  ·  release to throw  ', {
       fontFamily: '"Arial", sans-serif',
-      fontSize: `${Math.min(otherSlotH * 0.24, S * 0.034, 14)}px`,
+      fontSize: `${Math.min(otherSlotH * 0.24, S * 0.034, 18)}px`,
       color: '#d0bb9d', letterSpacing: 1,
     }).setOrigin(0.5).setAlpha(0.75);
 
     this.add.text(W - 10, H - 8, 'v1.0', {
-      fontFamily: '"Courier New", monospace', fontSize: '9px', color: '#111820',
+      fontFamily: '"Bebas Neue", Impact, sans-serif', fontSize: '9px', color: '#111820',
     }).setOrigin(1, 1);
 
     // ── INPUT ─────────────────────────────────────────────────────────────

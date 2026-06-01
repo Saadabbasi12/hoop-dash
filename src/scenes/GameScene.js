@@ -600,7 +600,7 @@ export class GameScene extends Phaser.Scene {
   _scoreTextPop(x, y, text, color = '#ffff00') {
     const size = this._fs(0.07, 34);
     const t = this.add.text(x, y, text, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${size}px`, color,
       stroke: '#000', strokeThickness: 4,
       shadow: { color, blur: 10, fill: true }
@@ -661,7 +661,7 @@ export class GameScene extends Phaser.Scene {
 
     const labelSize = Math.max(Math.min(S * 0.020, 8), 7);
     this.add.text(W / 2, scorePillY + 4, 'SCORE', {
-      fontFamily: '"Courier New", monospace',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${labelSize}px`,
       fontStyle: 'bold', 
       color: '#b0ebf6',
@@ -670,7 +670,7 @@ export class GameScene extends Phaser.Scene {
 
     const numSize = Math.min(fs(0.042, 16), scorePillH * 0.40);
     this.scoreText = this.add.text(W / 2, scorePillCY + 3, '0', {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${numSize}px`,
       color: '#b0ebf6',
     }).setOrigin(0.5, 0.5).setDepth(D).setScrollFactor(0);
@@ -690,7 +690,7 @@ export class GameScene extends Phaser.Scene {
     this._refreshHearts();
 
     this.comboText = this.add.text(W / 2, totalBarH + 8, '', {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+    fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${fs(0.052, 22)}px`,
       color: '#ffd700',
       stroke: '#7a4400', strokeThickness: 3,
@@ -734,7 +734,7 @@ export class GameScene extends Phaser.Scene {
     const maxPillW = W / 2 - scorePillHalfW - marginR - 4;
 
     // Font sizes — responsive + hard floor so text is always readable
-    const nameSize  = Phaser.Math.Clamp(S * 0.026, 8, 11);
+   const nameSize  = Phaser.Math.Clamp(S * 0.034, 10, 14);
     const iconSize  = Phaser.Math.Clamp(S * 0.028, 9, 13);
 
     const rank = RANK_TIERS[this.currentRankIdx];
@@ -748,7 +748,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(D).setScrollFactor(0);
 
     this._rankName = this.add.text(0, pillCY, rank.name, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize:   `${nameSize}px`,
       color:      rank.hex,
     }).setOrigin(0, 0.5).setDepth(D).setScrollFactor(0);
@@ -855,7 +855,7 @@ export class GameScene extends Phaser.Scene {
     const S    = Math.min(this.W, this.H);
     const popY = this._totalBarH + S * 0.12;
     const line1 = this.add.text(this.W / 2, popY, `${rank.icon} RANK UP!`, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize:   `${Math.min(S * 0.075, 34)}px`,
       color:      rank.hex,
       stroke:     '#000000', strokeThickness: 5,
@@ -863,10 +863,11 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(60).setAlpha(0);
 
     const line2 = this.add.text(this.W / 2, popY + Math.min(S * 0.085, 38), rank.name, {
-      fontFamily: '"Arial Black", Impact, sans-serif',
-      fontSize:   `${Math.min(S * 0.058, 26)}px`,
-      color:      '#ffffff',
-      stroke:     '#000000', strokeThickness: 4,
+     fontFamily: '"Bebas Neue", Impact, sans-serif',
+    fontSize: `${Math.min(S * 0.08, 42)}px`,
+    color: '#ffffff',
+    stroke: '#000000',
+    strokeThickness: 4,
     }).setOrigin(0.5).setDepth(60).setAlpha(0);
 
     this.tweens.add({ targets: line1, alpha: 1, y: popY - 10, duration: 280, ease: 'Back.easeOut' });
