@@ -17,17 +17,14 @@ const { width, height } = getGameSize();
 const dpr = window.devicePixelRatio || 1;
 const config = {
   type: Phaser.AUTO,
- width: width * dpr,        // ← render at native pixels
-  height: height * dpr,      // ← render at native pixels
-
+  width,
+  height,
   parent: 'game-container',
   backgroundColor: '#030812',
- 
+   resolution: window.devicePixelRatio || 1,
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: width * dpr,
-    height: height * dpr,
   },
   physics: {
     default: 'arcade',
