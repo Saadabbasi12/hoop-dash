@@ -50,6 +50,7 @@ export class GameScene extends Phaser.Scene {
 
     // State
     this.score        = 0;
+    this._ballTweenId = 0;
     this.bestScore    = 0;
     this.lives        = 3;
     this.combo        = 0;
@@ -311,78 +312,81 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  _stepNet(basket, dt) {
-    const net = basket.net;
-    if (!net) return;
+ _stepNet(basket, dt) {
+  const net = basket.net;
+  if (!net) return;
 
-    if (this.dragStart && !this.ballInFlight && basket === this.currentBasket) {
-      const dx = this.ballX - this._ballRestX;
-      const dy = this.ballY - this._ballRestY;
-      net.dragOffsetX = dx;
-      net.dragOffsetY = dy;
+  if (this.dragStart && !this.ballInFlight && basket === this.currentBasket) {
+    const rawDX = this.ballX - this._ballRestX;
+    const rawDY = this.ballY - this._ballRestY;
+
+    // Clamp drag offset so net deformation never visually exceeds the rim opening
+    const rimPx   = RIM_RADIUS * this.hoopScale;
+    const maxOff  = rimPx * 0.85;
+    const offDist = Math.hypot(rawDX, rawDY);
+    const offClamp = offDist > maxOff ? maxOff / offDist : 1;
+
+    net.dragOffsetX = rawDX * offClamp;
+    net.dragOffsetY = rawDY * offClamp;
+  } else {
+    net.dragOffsetX *= 0.88;
+    net.dragOffsetY *= 0.88;
+  }
+
+  if (net.shakeAmt > 0) {
+    net.shakeAmt -= net.shakeDecay * dt;
+    if (net.shakeAmt < 0) net.shakeAmt = 0;
+  }
+
+  if (basket.netImg) {
+    const shakeX = net.shakeAmt * Math.sin(Date.now() * 0.025) * 0.6;
+
+    const isDragging = this.dragStart && !this.ballInFlight && basket === this.currentBasket;
+    const dragTilt   = isDragging ? -net.dragOffsetX * 0.45 : 0;
+    const shakeTilt  = net.shakeAmt * 0.3 * Math.sin(Date.now() * 0.018);
+    const angle      = (basket.tiltDeg || 0) + dragTilt + shakeTilt;
+
+    const baseS = basket.netBaseScale || this.hoopScale;
+    if (isDragging) {
+      const nx       = basket.x + net.dragOffsetX * 0.35 + shakeX;
+      const pullDown = Math.max(net.dragOffsetY, 0);
+      const pullUp   = Math.min(net.dragOffsetY, 0);
+
+      // Clamp stretch so net image never grows beyond 1.3× base scale
+      const stretchY  = Math.min(1 + pullDown * 0.008, 1.3);
+      const squishY   = 1 + pullUp * 0.004;
+      const scaleY    = baseS * stretchY * squishY;
+      const scaleX    = baseS / Math.max(stretchY, 1) * 0.96 + baseS * 0.04;
+      const ny        = basket.y + pullDown * 0.12;
+
+      basket.netImg.x = nx;
+      basket.netImg.y = ny;
+      basket.netImg.setAngle(angle);
+      basket.netImg.setScale(scaleX, scaleY);
+      if (basket.netImgFront) {
+        basket.netImgFront.x = nx;
+        basket.netImgFront.y = ny;
+        basket.netImgFront.setAngle(angle);
+        basket.netImgFront.setScale(scaleX, scaleY);
+      }
     } else {
-      net.dragOffsetX *= 0.88;
-      net.dragOffsetY *= 0.88;
-    }
+      const relaxStretch = Math.min(1 + Math.max(net.dragOffsetY, 0) * 0.008, 1.3);
+      const relaxScaleY  = baseS * relaxStretch;
+      const relaxScaleX  = baseS / Math.max(relaxStretch, 1) * 0.96 + baseS * 0.04;
 
-    if (net.shakeAmt > 0) {
-      net.shakeAmt -= net.shakeDecay * dt;
-      if (net.shakeAmt < 0) net.shakeAmt = 0;
-    }
-
-    if (basket.netImg) {
-      const shakeX = net.shakeAmt * Math.sin(Date.now() * 0.025) * 0.6;
-
-      const isDragging = this.dragStart && !this.ballInFlight && basket === this.currentBasket;
-      const dragTilt   = isDragging ? -net.dragOffsetX * 0.45 : 0;
-      const shakeTilt  = net.shakeAmt * 0.3 * Math.sin(Date.now() * 0.018);
-      const angle      = (basket.tiltDeg || 0) + dragTilt + shakeTilt;
-
-      // While dragging: shift and stretch net image toward ball position
-      const baseS = basket.netBaseScale || this.hoopScale;
-      if (isDragging) {
-        // Horizontal offset: net mouth follows ball (attenuated)
-        const nx = basket.x + net.dragOffsetX * 0.35 + shakeX;
-        // Vertical stretch: how far ball is pulled downward stretches net
-        const pullDown  = Math.max(net.dragOffsetY, 0);           // only stretch, not compress
-        const pullUp    = Math.min(net.dragOffsetY, 0);           // pulling up compresses slightly
-        const stretchY  = 1 + pullDown * 0.008;                   // grow taller as ball pulls down
-        const squishY   = 1 + pullUp  * 0.004;                    // slight squish when pulled up
-        const scaleY    = baseS * stretchY * squishY;
-        // Slight horizontal squish when stretched (volume conservation feel)
-        const scaleX    = baseS / Math.max(stretchY, 1) * 0.96 + baseS * 0.04;
-        // Net origin shifts toward ball horizontally
-        const ny = basket.y + pullDown * 0.12;
-
-        basket.netImg.x = nx;
-        basket.netImg.y = ny;
-        basket.netImg.setAngle(angle);
-        basket.netImg.setScale(scaleX, scaleY);
-        if (basket.netImgFront) {
-          basket.netImgFront.x = nx;
-          basket.netImgFront.y = ny;
-          basket.netImgFront.setAngle(angle);
-          basket.netImgFront.setScale(scaleX, scaleY);
-        }
-      } else {
-        // Not dragging: spring back to base scale (already handled by dragOffsetX/Y decay)
-        const relaxStretch = 1 + Math.max(net.dragOffsetY, 0) * 0.008;
-        const relaxScaleY  = baseS * relaxStretch;
-        const relaxScaleX  = baseS / Math.max(relaxStretch, 1) * 0.96 + baseS * 0.04;
-
-        basket.netImg.x = basket.x + shakeX;
-        basket.netImg.y = basket.y + Math.max(net.dragOffsetY, 0) * 0.12;
-        basket.netImg.setAngle(angle);
-        basket.netImg.setScale(relaxScaleX, relaxScaleY);
-        if (basket.netImgFront) {
-          basket.netImgFront.x = basket.netImg.x;
-          basket.netImgFront.y = basket.netImg.y;
-          basket.netImgFront.setAngle(angle);
-          basket.netImgFront.setScale(relaxScaleX, relaxScaleY);
-        }
+      basket.netImg.x = basket.x + shakeX;
+      basket.netImg.y = basket.y + Math.max(net.dragOffsetY, 0) * 0.12;
+      basket.netImg.setAngle(angle);
+      basket.netImg.setScale(relaxScaleX, relaxScaleY);
+      if (basket.netImgFront) {
+        basket.netImgFront.x = basket.netImg.x;
+        basket.netImgFront.y = basket.netImg.y;
+        basket.netImgFront.setAngle(angle);
+        basket.netImgFront.setScale(relaxScaleX, relaxScaleY);
       }
     }
   }
+}
 
   _drawNet(basket, tintColor, alpha = 1) {
     // Net is now rendered as basket.png image — graphics layers kept for depth management only.
@@ -527,68 +531,74 @@ export class GameScene extends Phaser.Scene {
   // ══════════════════════════════════════════════════════════════════════════
   //  SCORE ANIMATION — ball passes through net with physics
   // ══════════════════════════════════════════════════════════════════════════
-  _animateBallThroughBasket(targetBasket, onDone) {
-    const img      = targetBasket.img;
-    const rimY     = targetBasket.y;
-    const exitY    = rimY + 55 * this.hoopScale;
+_animateBallThroughBasket(targetBasket, onDone) {
+  const img   = targetBasket.img;
+  const rimY  = targetBasket.y;
+  const exitY = rimY + 55 * this.hoopScale;
 
-    this.ballInsideNet = true;
-    this.netBallBasket = targetBasket;
-    this.ball.setDepth(4);
+  this.ballInsideNet = true;
+  this.netBallBasket = targetBasket;
+  this.ball.setDepth(4);
 
-    this._impulseNet(targetBasket, targetBasket.x, rimY + 10, 360);
+  this._impulseNet(targetBasket, targetBasket.x, rimY + 10, 360);
 
-    const netImg   = targetBasket.netImg;
-    const baseS    = targetBasket.netBaseScale || this.hoopScale;
-    const squashTarget = netImg || img;
-    this.tweens.add({
-      targets: squashTarget,
-      scaleY: baseS * 1.18,
-      scaleX: baseS * 0.92,
-      duration: 80, ease: 'Power2', yoyo: true,
-      onComplete: () => {
-        this.tweens.add({
-          targets: squashTarget,
-          scaleX: baseS * 1.04,
-          scaleY: baseS * 0.96,
-          duration: 70, yoyo: true, ease: 'Power1',
-          onComplete: () => {
-            if (netImg) netImg.setScale(baseS);
-            else img.setScale(this.hoopScale);
-            if (onDone) onDone();
-          }
-        });
-      }
-    });
+  const netImg    = targetBasket.netImg;
+  const baseS     = targetBasket.netBaseScale || this.hoopScale;
+  const squashTarget = netImg || img;
+  this.tweens.add({
+    targets: squashTarget,
+    scaleY: baseS * 1.18,
+    scaleX: baseS * 0.92,
+    duration: 80, ease: 'Power2', yoyo: true,
+    onComplete: () => {
+      this.tweens.add({
+        targets: squashTarget,
+        scaleX: baseS * 1.04,
+        scaleY: baseS * 0.96,
+        duration: 70, yoyo: true, ease: 'Power1',
+        onComplete: () => {
+          if (netImg) netImg.setScale(baseS);
+          else img.setScale(this.hoopScale);
+          if (onDone) onDone();
+        }
+      });
+    }
+  });
 
-    this.tweens.add({
-      targets: this.ball,
-      y: exitY,
-      x: targetBasket.x + (this.ballVX > 0 ? 6 : -6),
-      scaleX: this.ballScale * 0.78,
-      scaleY: this.ballScale * 1.12,
-      alpha: 0.75,
-      duration: 180,
-      ease: 'Power2',
-      onComplete: () => {
-        this.tweens.add({
-          targets: this.ball,
-          y: exitY + 20,
-          scaleX: this.ballScale * 0.4,
-          scaleY: this.ballScale * 0.4,
-          alpha: 0,
-          duration: 90,
-          ease: 'Power2',
-          onComplete: () => {
-            this.ball.setAlpha(0);
-            this.ball.setDepth(4);
-            this.ballInsideNet = false;
-            this.netBallBasket = null;
-          }
-        });
-      }
-    });
-  }
+  // Track whether the ball tween sequence is still "owned" by this scoring event
+  const tweenId = ++this._ballTweenId;   // unique stamp per score
+
+  this.tweens.add({
+    targets: this.ball,
+    y: exitY,
+    x: targetBasket.x + (this.ballVX > 0 ? 6 : -6),
+    scaleX: this.ballScale * 0.78,
+    scaleY: this.ballScale * 1.12,
+    alpha: 0.75,
+    duration: 180,
+    ease: 'Power2',
+    onComplete: () => {
+      // Bail out if _resetBall already reclaimed the ball for the next shot
+      if (this._ballTweenId !== tweenId) return;
+      this.tweens.add({
+        targets: this.ball,
+        y: exitY + 20,
+        scaleX: this.ballScale * 0.4,
+        scaleY: this.ballScale * 0.4,
+        alpha: 0,
+        duration: 90,
+        ease: 'Power2',
+        onComplete: () => {
+          if (this._ballTweenId !== tweenId) return;
+          this.ball.setAlpha(0);
+          this.ball.setDepth(4);
+          this.ballInsideNet = false;
+          this.netBallBasket = null;
+        }
+      });
+    }
+  });
+}
 
   // ── BALL ──────────────────────────────────────────────────────────────────
   _initBall() {
@@ -607,19 +617,46 @@ export class GameScene extends Phaser.Scene {
     this.powerIndicator = this.add.graphics().setDepth(9);
   }
 
-  _resetBall() {
-    const netHeight = 56 * this.hoopScale;
-    this.ballX = this.currentBasket.x;
-    this.ballY = this.currentBasket.y + netHeight * 0.65;
-    this.ballVX = this.ballVY = 0;
-    this.ballRotation = 0;
-    this.ballInFlight = false;
-    this.ballInsideNet = false;
-    this.netBallBasket = null;
-    this.ball.setPosition(this.ballX, this.ballY).setAlpha(1).setScale(this.ballScale).setDepth(4).setRotation(0);
-    this.tweens.add({ targets: this.ball, scaleX: this.ballScale * 1.22, scaleY: this.ballScale * 0.80, duration: 110, yoyo: true, ease: 'Power2' });
-    soundManager.playBounce();
-  }
+_resetBall(basket) {
+  // Use the explicitly passed basket, fall back to currentBasket only as last resort
+  const targetBasket = basket || this.currentBasket;
+
+  // Kill any in-progress ball tweens so stale alpha/scale never carry over
+  this.tweens.killTweensOf(this.ball);
+
+  const netHeight = 56 * this.hoopScale;
+  this.ballX = targetBasket.x;
+  this.ballY = targetBasket.y + netHeight * 0.65;
+
+  // Guard: if the computed Y is offscreen, something went wrong — clamp it
+  const hudBottom = this._totalBarH ?? 60;
+  const ballR     = 24 * this.ballScale;
+  this.ballX = Phaser.Math.Clamp(this.ballX, (this.leftWallX ?? 0) + ballR, (this.rightWallX ?? this.W) - ballR);
+  this.ballY = Phaser.Math.Clamp(this.ballY, hudBottom + ballR, this.H - ballR);
+
+  this.ballVX = this.ballVY = 0;
+  this.ballRotation = 0;
+  this.ballInFlight = false;
+  this.ballInsideNet = false;
+  this.netBallBasket = null;
+
+  this.ball
+    .setPosition(this.ballX, this.ballY)
+    .setAlpha(1)
+    .setScale(this.ballScale)
+    .setDepth(4)
+    .setRotation(0);
+
+  this.tweens.add({
+    targets: this.ball,
+    scaleX: this.ballScale * 1.22,
+    scaleY: this.ballScale * 0.80,
+    duration: 110,
+    yoyo: true,
+    ease: 'Power2'
+  });
+  soundManager.playBounce();
+}
 
   // ── PARTICLES / EFFECTS ───────────────────────────────────────────────────
   _burst(x, y, color, count = 12) {
@@ -1094,21 +1131,38 @@ _createUI() {
     soundManager.resume();
   }
 
-  _onPointerMove(ptr) {
-    if (!this.dragStart || this.isPaused || this.isGameOver || this.ballInFlight) return;
+ _onPointerMove(ptr) {
+  if (!this.dragStart || this.isPaused || this.isGameOver || this.ballInFlight) return;
 
-    const rawDX  = ptr.x - this.dragStart.x;
-    const rawDY  = ptr.y - this.dragStart.y;
-    const dist   = Math.hypot(rawDX, rawDY);
-    const maxPull = 80;
-    const clamp  = dist > maxPull ? maxPull / dist : 1;
+  const rawDX = ptr.x - this.dragStart.x;
+  const rawDY = ptr.y - this.dragStart.y;
+  const dist  = Math.hypot(rawDX, rawDY);
 
-    this.ballX = this._ballRestX + rawDX * clamp;
-    this.ballY = this._ballRestY + rawDY * clamp;
-    this.ball.setPosition(this.ballX, this.ballY).setRotation(0);
+  // Clamp pull distance to a max that keeps ball inside the rim visually
+  // RIM_RADIUS * hoopScale gives the actual rim opening in screen pixels
+  const rimPx  = RIM_RADIUS * this.hoopScale;        // ~half the hoop opening
+  const maxPull = Math.min(80, rimPx * 0.85);         // never exceed 85% of rim radius
+  const clamp  = dist > maxPull ? maxPull / dist : 1;
 
-    this._drawAimGuide(ptr);
-  }
+  const clampedDX = rawDX * clamp;
+  const clampedDY = rawDY * clamp;
+
+  // Ball position stays within rim circle centred on rest position
+  this.ballX = this._ballRestX + clampedDX;
+  this.ballY = this._ballRestY + clampedDY;
+
+  // Additionally clamp to wall + HUD boundaries
+  const ballR  = 24 * this.ballScale;
+  const minX   = (this.leftWallX  ?? 0)       + ballR;
+  const maxX   = (this.rightWallX ?? this.W)  - ballR;
+  const minY   = (this._totalBarH ?? 60)      + ballR;
+  const maxY   = this.H - ballR;
+  this.ballX   = Phaser.Math.Clamp(this.ballX, minX, maxX);
+  this.ballY   = Phaser.Math.Clamp(this.ballY, minY, maxY);
+
+  this.ball.setPosition(this.ballX, this.ballY).setRotation(0);
+  this._drawAimGuide(ptr);
+}
 
   _onPointerUp(ptr) {
     if (!this.dragStart || this.isPaused || this.isGameOver || this.ballInFlight) return;
@@ -1214,73 +1268,76 @@ _createUI() {
   }
 
   // ── SCORING & GAME FLOW ───────────────────────────────────────────────────
-  _onScore() {
-    this.totalBaskets++;
-    this.combo++;
+ _onScore() {
+  this.totalBaskets++;
+  this.combo++;
 
-    if (this.totalBaskets % 3 === 0) {
-      this.basketMoveAxis = this.basketMoveAxis === 'h' ? 'v' : 'h';
-      if (this.targetBasket && this.targetBasket.moveRange) {
-        this.targetBasket.moveAxis      = this.basketMoveAxis;
-        this.targetBasket.moveCycleTime = 0;
-        this.targetBasket.x           = this.targetBasket.baseX;
-        this.targetBasket.img.x       = this.targetBasket.baseX;
-        this.targetBasket.scoreZone.x = this.targetBasket.baseX;
-        this.targetBasket.y           = this.targetBasket.baseY;
-        this.targetBasket.img.y       = this.targetBasket.baseY;
-        this.targetBasket.scoreZone.y = this.targetBasket.baseY;
-      }
+  if (this.totalBaskets % 3 === 0) {
+    this.basketMoveAxis = this.basketMoveAxis === 'h' ? 'v' : 'h';
+    if (this.targetBasket && this.targetBasket.moveRange) {
+      this.targetBasket.moveAxis      = this.basketMoveAxis;
+      this.targetBasket.moveCycleTime = 0;
+      this.targetBasket.x             = this.targetBasket.baseX;
+      this.targetBasket.img.x         = this.targetBasket.baseX;
+      this.targetBasket.scoreZone.x   = this.targetBasket.baseX;
+      this.targetBasket.y             = this.targetBasket.baseY;
+      this.targetBasket.img.y         = this.targetBasket.baseY;
+      this.targetBasket.scoreZone.y   = this.targetBasket.baseY;
     }
-    this.comboTimer = 3.5;
-
-    const multiplier = Math.min(this.combo, 8);
-    const points     = 1 * multiplier;
-    this.score      += points;
-    this.difficulty  = 1 + Math.floor(this.score / 5);
-
-    this._updateScoreUI();
-    this._updateRank();
-    soundManager.playScore();
-
-    if (this.combo > 1) {
-      this.comboText.setText(`x${this.combo} COMBO!`);
-      this.tweens.killTweensOf(this.comboText);
-      this.comboText.setAlpha(1).setScale(1.2);
-      this.tweens.add({ targets: this.comboText, scaleX: 1, scaleY: 1, duration: 200 });
-      soundManager.playCombo(Math.min(this.combo, 5));
-    } else {
-      this.comboText.setAlpha(0);
-    }
-
-    const label = this.combo > 1 ? `+${points} 🔥` : `+${points}`;
-    this._scoreTextPop(this.targetBasket.x, this.targetBasket.y - 20, label, this.combo > 2 ? '#ff4444' : '#ffff00');
-    this._burst(this.targetBasket.x, this.targetBasket.y + 20, 0xff6b35, 14);
-
-    if (this.score > this.bestScore) this.bestScore = this.score;
-    YTPlayables.sendScore(this.score);
-
-    // ── Laser: clear any current laser on score, then count toward next spawn ─
-    if (this.laserObstacle) {
-      this._clearLaser(true);
-    } else {
-      this.laserBasketsCount++;
-      if (this.laserBasketsCount >= this.nextLaserIn) {
-        // Spawn laser AFTER baskets advance so the Y midpoint is accurate
-        this._pendingLaserSpawn = true;
-      }
-    }
-
-    this._animateBallThroughBasket(this.targetBasket, () => {
-      if (!this.isGameOver) {
-        this._advanceBaskets();
-        if (this._pendingLaserSpawn) {
-          this._pendingLaserSpawn = false;
-          this.time.delayedCall(300, () => { if (!this.isGameOver) this._spawnLaser(); });
-        }
-        this.time.delayedCall(120, () => { if (!this.isGameOver) this._resetBall(); });
-      }
-    });
   }
+  this.comboTimer = 3.5;
+
+  const multiplier = Math.min(this.combo, 8);
+  const points     = 1 * multiplier;
+  this.score      += points;
+  this.difficulty  = 1 + Math.floor(this.score / 5);
+
+  this._updateScoreUI();
+  this._updateRank();
+  soundManager.playScore();
+
+  if (this.combo > 1) {
+    this.comboText.setText(`x${this.combo} COMBO!`);
+    this.tweens.killTweensOf(this.comboText);
+    this.comboText.setAlpha(1).setScale(1.2);
+    this.tweens.add({ targets: this.comboText, scaleX: 1, scaleY: 1, duration: 200 });
+    soundManager.playCombo(Math.min(this.combo, 5));
+  } else {
+    this.comboText.setAlpha(0);
+  }
+
+  const label = this.combo > 1 ? `+${points} 🔥` : `+${points}`;
+  this._scoreTextPop(this.targetBasket.x, this.targetBasket.y - 20, label, this.combo > 2 ? '#ff4444' : '#ffff00');
+  this._burst(this.targetBasket.x, this.targetBasket.y + 20, 0xff6b35, 14);
+
+  if (this.score > this.bestScore) this.bestScore = this.score;
+  YTPlayables.sendScore(this.score);
+
+  if (this.laserObstacle) {
+    this._clearLaser(true);
+  } else {
+    this.laserBasketsCount++;
+    if (this.laserBasketsCount >= this.nextLaserIn) {
+      this._pendingLaserSpawn = true;
+    }
+  }
+
+  this._animateBallThroughBasket(this.targetBasket, () => {
+    if (!this.isGameOver) {
+      this._advanceBaskets();
+      if (this._pendingLaserSpawn) {
+        this._pendingLaserSpawn = false;
+        this.time.delayedCall(300, () => { if (!this.isGameOver) this._spawnLaser(); });
+      }
+      // ── Capture the CURRENT basket reference NOW, immediately after
+      // _advanceBaskets(), before any async delay can change it again.
+      const basketForReset = this.currentBasket;
+      this.time.delayedCall(120, () => {
+        if (!this.isGameOver) this._resetBall(basketForReset);
+      });
+    }
+  });
+}
 
   _onMiss() {
     this.combo = 0; this.comboTimer = 0;
@@ -1293,7 +1350,7 @@ _createUI() {
     this.netBallBasket = null;
     this.ball.setDepth(4).setAlpha(1);
     if (this.lives <= 0) this._gameOver();
-    else this.time.delayedCall(350, () => { if (!this.isGameOver) this._resetBall(); });
+    else this.time.delayedCall(350, () => { if (!this.isGameOver)  this._resetBall(this.currentBasket); });
   }
 
   _gameOver() {
