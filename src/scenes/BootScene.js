@@ -10,79 +10,164 @@ export class BootScene extends Phaser.Scene {
   constructor() { super({ key: 'BootScene' }); }
 
   preload() {
-    // firstFrameReady already called in main.js before Phaser started.
-    // Load images — graceful fallback if files missing.
     this.load.image('basketball_png', basketballUrl);
     this.load.image('bg', backgroundUrl);
     this.load.on('filecomplete-image-basketball_png', () => { this._usePng = true; });
     this.load.on('filefailed-image-basketball_png',  () => { this._usePng = false; });
     this.load.image('basket_net', basketUrl);
     this.load.image('hoopdash_logo', hoopdashUrl);
-    const fontTest = this.add.text(-999, -999, 'X', {
-  fontFamily: '"Bebas Neue"',
-  fontSize: '32px'
-});
-this.time.delayedCall(100, () => fontTest.destroy());
+
+    // Font warm-up — force rasterise before we need it
+    const fontTest = this.add.text(-9999, -9999, 'LOADING 100%', {
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
+      fontSize: '32px',
+    });
+    this.time.delayedCall(120, () => fontTest.destroy());
 
     const W = this.scale.width;
     const H = this.scale.height;
     const S = Math.min(W, H);
 
-    this.cameras.main.setBackgroundColor('#030812');
+    // ── PURE BLACK BACKGROUND ─────────────────────────────────────────────
+    this.cameras.main.setBackgroundColor('#000000');
 
-    // Background image — stretched to fill screen
-    if (this.textures.exists('bg')) {
-      this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
+    // ── LAYOUT ANCHORS ────────────────────────────────────────────────────
+    const centerY = H * 0.72;
+    const barW    = Math.min(W * 0.68, 340);
+    const barH    = 3;
+    const barX    = W / 2 - barW / 2;
+    const barY    = centerY;
+
+    // ── SEGMENT TICK MARKS (behind the bar) ───────────────────────────────
+    const tickG = this.add.graphics();
+    tickG.lineStyle(1, 0xffffff, 0.06);
+    const segments = 10;
+    for (let i = 1; i < segments; i++) {
+      const tx = barX + (barW / segments) * i;
+      tickG.lineBetween(tx, barY - 6, tx, barY + barH + 6);
     }
 
-    // ── PROGRESS BAR ──────────────────────────────────────────────────────
-    const barW = Math.min(W * 0.55, 300);
-    const barH = 4;
-    const barX = W / 2 - barW / 2;
-    const barY = H * 0.72;
+    // ── BAR TRACK ─────────────────────────────────────────────────────────
+    const track = this.add.graphics();
+    track.fillStyle(0x111111, 1);
+    track.fillRoundedRect(barX - 1, barY - 1, barW + 2, barH + 2, 2);
 
-    // Bar track
-    this.add.rectangle(W / 2, barY + barH / 2, barW + 2, barH + 2, 0x111830);
+    // ── GLOW LAYER ────────────────────────────────────────────────────────
+    const glowBar = this.add.graphics();
+    const _drawGlow = (w) => {
+      glowBar.clear();
+      if (w < 2) return;
+      glowBar.fillStyle(0xff6b35, 0.18);
+      glowBar.fillRoundedRect(barX - 2, barY - 4, w + 4, barH + 8, 3);
+    };
 
-    // Bar fill
-    const bar    = this.add.rectangle(barX, barY + barH / 2, 2, barH, 0xff6b35).setOrigin(0, 0.5);
-    const barDot = this.add.circle(barX + 2, barY + barH / 2, 5, 0xff9955, 1);
+    // ── FILL BAR ──────────────────────────────────────────────────────────
+    const fillBar = this.add.graphics();
+    const _drawFill = (w, done) => {
+      fillBar.clear();
+      if (w < 1) return;
+      const col = done ? 0x00f5d4 : 0xff6b35;
+      fillBar.fillStyle(col, 1);
+      fillBar.fillRoundedRect(barX, barY, w, barH, 1);
+      // bright leading edge highlight
+      fillBar.fillStyle(0xffffff, done ? 0.6 : 0.9);
+      fillBar.fillRect(barX + w - 2, barY, 2, barH);
+    };
 
-    this.tweens.add({
-      targets: bar, width: barW, duration: 900, ease: 'Power2',
-      onUpdate: () => { barDot.x = barX + bar.width; }
-    });
+    // ── LEADING DOT ───────────────────────────────────────────────────────
+    const dot = this.add.circle(barX, barY + barH / 2, 4.5, 0xff9955, 1);
+    const dotRing = this.add.graphics();
+    const _drawRing = (x, done) => {
+      dotRing.clear();
+      dotRing.lineStyle(1, done ? 0x00f5d4 : 0xff9955, 0.5);
+      dotRing.strokeCircle(x, barY + barH / 2, 7.5);
+    };
 
     // ── PERCENTAGE TEXT ───────────────────────────────────────────────────
-    const pctText = this.add.text(W / 2 + barW / 2, barY - 14, '0%', {
-     fontFamily: '"Bebas Neue", Impact, sans-serif',
-      fontSize: `${Math.min(S * 0.032, 13)}px`,
+    const pctSize = Math.min(S * 0.062, 26);
+    const pctShadow = this.add.text(W / 2 + barW / 2 + 2, barY - 18, '0%', {
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
+      fontSize: `${pctSize}px`,
+      color: '#330e00',
+    }).setOrigin(1, 1).setAlpha(0.8);
+
+    const pctText = this.add.text(W / 2 + barW / 2, barY - 18, '0%', {
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
+      fontSize: `${pctSize}px`,
       color: '#ff9955',
     }).setOrigin(1, 1);
 
-    this.tweens.add({
-      targets: { v: 0 }, v: 100, duration: 900, ease: 'Power2',
-      onUpdate: (tw, t) => { pctText.setText(Math.floor(t.v) + '%'); },
-      onComplete: () => { bar.setFillStyle(0x00e8c0); pctText.setStyle({ color: '#00e8c0' }); pctText.setText('100%'); }
-    });
+    // ── LOADING LABEL — crisp offset shadow, no blur ──────────────────────
+    const labelSize = Math.min(S * 0.034, 14);
 
-    // ── LOADING LABEL ─────────────────────────────────────────────────────
-    const loadLabel = this.add.text(W / 2, barY + 22, 'LOADING', {
-     fontFamily: '"Bebas Neue", Impact, sans-serif',
-      fontSize: `${Math.min(S * 0.032, 13)}px`,
-      color: '#8ab4d4',
+    const labelShadow = this.add.text(barX + 2, barY + barH + 14, 'LOADING', {
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
+      fontSize: `${labelSize}px`,
+      color: '#000000',
       letterSpacing: 6,
-      shadow: { color: '#2266aa', blur: 10, fill: true },
-    }).setOrigin(0.5);
+    }).setOrigin(0, 0).setAlpha(1);
 
-    let dotCount = 0;
-    this.time.addEvent({
-      delay: 280, repeat: 12,
-      callback: () => {
-        loadLabel.setText('LOADING' + '.'.repeat(dotCount % 4));
-        dotCount++;
-      }
+    const loadLabel = this.add.text(barX, barY + barH + 13, 'LOADING', {
+      fontFamily: '"Bebas Neue", Impact, sans-serif',
+      fontSize: `${labelSize}px`,
+      color: '#5590c0',
+      letterSpacing: 6,
+    }).setOrigin(0, 0);
+
+    // ── ANIMATED PROGRESS ─────────────────────────────────────────────────
+    const prog = { v: 0 };
+    this.tweens.add({
+      targets: prog, v: 100,
+      duration: 900, ease: 'Power2',
+      onUpdate: () => {
+        const pct   = Math.floor(prog.v);
+        const fillW = (prog.v / 100) * barW;
+        const dotX  = barX + fillW;
+        const done  = prog.v >= 99.9;
+
+        _drawGlow(fillW);
+        _drawFill(fillW, done);
+
+        dot.x = dotX;
+        dot.setFillStyle(done ? 0x00f5d4 : 0xff9955);
+        _drawRing(dotX, done);
+
+        pctShadow.setText(pct + '%');
+        pctText.setText(pct + '%');
+
+        if (done) {
+          pctText.setStyle({ color: '#00f5d4' });
+          pctShadow.setStyle({ color: '#003d30' });
+          loadLabel.setStyle({ color: '#00c8a8' });
+          labelShadow.setStyle({ color: '#000000' });
+        }
+      },
     });
+
+    // ── DOT PULSE ─────────────────────────────────────────────────────────
+    this.tweens.add({
+      targets: dot, scaleX: 1.35, scaleY: 1.35,
+      duration: 480, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+
+    // ── ANIMATED DOTS on label ────────────────────────────────────────────
+    const dotLabels = ['LOADING', 'LOADING .', 'LOADING . .', 'LOADING . . .'];
+    let dotIdx = 0;
+    this.time.addEvent({
+      delay: 260, repeat: 14,
+      callback: () => {
+        dotIdx = (dotIdx + 1) % dotLabels.length;
+        loadLabel.setText(dotLabels[dotIdx]);
+        labelShadow.setText(dotLabels[dotIdx]);
+      },
+    });
+
+    // ── SUBTLE SCANLINES ──────────────────────────────────────────────────
+    const scanG = this.add.graphics().setAlpha(0.03).setDepth(50);
+    for (let sy = 0; sy < H; sy += 4) {
+      scanG.lineStyle(1, 0xffffff, 1);
+      scanG.lineBetween(0, sy, W, sy);
+    }
 
     generateAssets(this);
     soundManager.init();
