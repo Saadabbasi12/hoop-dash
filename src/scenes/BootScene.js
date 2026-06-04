@@ -5,6 +5,13 @@ import hoopdashUrl from '../assets/hoopdash.png';
 import basketballUrl from '../assets/basketball.png';
 import basketUrl from '../assets/basket.png';
 import backgroundUrl from '../assets/background.png';
+import gameoverUrl from '../assets/gameover.png';
+import menubgPortraitUrl from '../assets/menubgportrait.png';
+import menubgLandscapeUrl from '../assets/menubglandscape.png';
+import playbtnUrl from '../assets/playbtn.png';
+import gameoverbgUrl from '../assets/gameoverbg.png';
+import playagainbtnUrl from '../assets/playagainbtn.png';
+import menubtnUrl from '../assets/menubtn.png';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super({ key: 'BootScene' }); }
@@ -16,6 +23,13 @@ export class BootScene extends Phaser.Scene {
     this.load.on('filefailed-image-basketball_png',  () => { this._usePng = false; });
     this.load.image('basket_net', basketUrl);
     this.load.image('hoopdash_logo', hoopdashUrl);
+    this.load.image('gameover_img', gameoverUrl);
+    this.load.image('menubgportrait',  menubgPortraitUrl);
+    this.load.image('menubglandscape', menubgLandscapeUrl);
+    this.load.image('playbtn', playbtnUrl);
+    this.load.image('gameoverbg', gameoverbgUrl);
+    this.load.image('playagainbtn', playagainbtnUrl);
+    this.load.image('menubtn', menubtnUrl);
 
     // Font warm-up — force rasterise before we need it
     const fontTest = this.add.text(-9999, -9999, 'LOADING 100%', {
@@ -28,17 +42,14 @@ export class BootScene extends Phaser.Scene {
     const H = this.scale.height;
     const S = Math.min(W, H);
 
-    // ── PURE BLACK BACKGROUND ─────────────────────────────────────────────
     this.cameras.main.setBackgroundColor('#000000');
 
-    // ── LAYOUT ANCHORS ────────────────────────────────────────────────────
     const centerY = H * 0.72;
     const barW    = Math.min(W * 0.68, 340);
     const barH    = 3;
     const barX    = W / 2 - barW / 2;
     const barY    = centerY;
 
-    // ── SEGMENT TICK MARKS (behind the bar) ───────────────────────────────
     const tickG = this.add.graphics();
     tickG.lineStyle(1, 0xffffff, 0.06);
     const segments = 10;
@@ -47,12 +58,10 @@ export class BootScene extends Phaser.Scene {
       tickG.lineBetween(tx, barY - 6, tx, barY + barH + 6);
     }
 
-    // ── BAR TRACK ─────────────────────────────────────────────────────────
     const track = this.add.graphics();
     track.fillStyle(0x111111, 1);
     track.fillRoundedRect(barX - 1, barY - 1, barW + 2, barH + 2, 2);
 
-    // ── GLOW LAYER ────────────────────────────────────────────────────────
     const glowBar = this.add.graphics();
     const _drawGlow = (w) => {
       glowBar.clear();
@@ -61,7 +70,6 @@ export class BootScene extends Phaser.Scene {
       glowBar.fillRoundedRect(barX - 2, barY - 4, w + 4, barH + 8, 3);
     };
 
-    // ── FILL BAR ──────────────────────────────────────────────────────────
     const fillBar = this.add.graphics();
     const _drawFill = (w, done) => {
       fillBar.clear();
@@ -69,12 +77,10 @@ export class BootScene extends Phaser.Scene {
       const col = done ? 0x00f5d4 : 0xff6b35;
       fillBar.fillStyle(col, 1);
       fillBar.fillRoundedRect(barX, barY, w, barH, 1);
-      // bright leading edge highlight
       fillBar.fillStyle(0xffffff, done ? 0.6 : 0.9);
       fillBar.fillRect(barX + w - 2, barY, 2, barH);
     };
 
-    // ── LEADING DOT ───────────────────────────────────────────────────────
     const dot = this.add.circle(barX, barY + barH / 2, 4.5, 0xff9955, 1);
     const dotRing = this.add.graphics();
     const _drawRing = (x, done) => {
@@ -83,7 +89,6 @@ export class BootScene extends Phaser.Scene {
       dotRing.strokeCircle(x, barY + barH / 2, 7.5);
     };
 
-    // ── PERCENTAGE TEXT ───────────────────────────────────────────────────
     const pctSize = Math.min(S * 0.062, 26);
     const pctShadow = this.add.text(W / 2 + barW / 2 + 2, barY - 18, '0%', {
       fontFamily: '"Bebas Neue", Impact, sans-serif',
@@ -97,7 +102,6 @@ export class BootScene extends Phaser.Scene {
       color: '#ff9955',
     }).setOrigin(1, 1);
 
-    // ── LOADING LABEL — crisp offset shadow, no blur ──────────────────────
     const labelSize = Math.min(S * 0.034, 14);
 
     const labelShadow = this.add.text(barX + 2, barY + barH + 14, 'LOADING', {
@@ -114,7 +118,6 @@ export class BootScene extends Phaser.Scene {
       letterSpacing: 6,
     }).setOrigin(0, 0);
 
-    // ── ANIMATED PROGRESS ─────────────────────────────────────────────────
     const prog = { v: 0 };
     this.tweens.add({
       targets: prog, v: 100,
@@ -144,13 +147,11 @@ export class BootScene extends Phaser.Scene {
       },
     });
 
-    // ── DOT PULSE ─────────────────────────────────────────────────────────
     this.tweens.add({
       targets: dot, scaleX: 1.35, scaleY: 1.35,
       duration: 480, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
     });
 
-    // ── ANIMATED DOTS on label ────────────────────────────────────────────
     const dotLabels = ['LOADING', 'LOADING .', 'LOADING . .', 'LOADING . . .'];
     let dotIdx = 0;
     this.time.addEvent({
@@ -162,7 +163,6 @@ export class BootScene extends Phaser.Scene {
       },
     });
 
-    // ── SUBTLE SCANLINES ──────────────────────────────────────────────────
     const scanG = this.add.graphics().setAlpha(0.03).setDepth(50);
     for (let sy = 0; sy < H; sy += 4) {
       scanG.lineStyle(1, 0xffffff, 1);

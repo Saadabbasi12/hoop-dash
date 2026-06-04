@@ -9,17 +9,31 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
-    const W = this.scale.width;
-    const H = this.scale.height;
-    const S = Math.min(W, H);
+    const W   = this.scale.width;
+    const H   = this.scale.height;
+    const S   = Math.min(W, H);
+    const DPR = Math.min(window.devicePixelRatio || 1, 3); // cap at 3× for perf
     const isPortrait = H > W;
 
+    // NOTE: setRoundPixels(true) is intentionally NOT used here.
+    // It snaps every sprite to integer pixels each frame, which makes smooth
+    // tweens (ball float, rotation) stutter and flicker on mobile.
+    // Text sharpness is handled per-object via `resolution: DPR` instead.
     this.cameras.main.fadeIn(600);
     this.cameras.main.setBackgroundColor('#030812');
 
-    // Background image — stretched to fill screen
-    if (this.textures.exists('bg')) {
-      this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
+    // ── MENU BACKGROUND ───────────────────────────────────────────────────
+    // Portrait on mobile (H > W), landscape on desktop — each pre-cropped to
+    // the correct ratio so cover-scale never upscales and stays sharp.
+    const _bgKey = isPortrait ? 'menubgportrait' : 'menubglandscape';
+    const _bgTex = this.textures.exists(_bgKey)
+      ? _bgKey
+      : this.textures.exists('bg') ? 'bg' : null;
+    if (_bgTex) {
+      const tex   = this.textures.get(_bgTex).source[0];
+      this.textures.get(_bgTex).setFilter(Phaser.Textures.FilterMode.LINEAR);
+      const scale = Math.max(W / tex.width, H / tex.height);
+      this.add.image(W / 2, H / 2, _bgTex).setScale(scale).setDepth(-20);
     }
 
     // Load saved data in background — gameReady fires regardless
@@ -43,16 +57,20 @@ export class MenuScene extends Phaser.Scene {
       const scaleByW = maxLogoW / tex.width;
       const scale    = Math.min(scaleByH, scaleByW);
       logoH          = tex.height * scale;
-      const logoY    = H * 0.025 + logoH / 2;
-      const logo     = this.add.image(W / 2, logoY, 'hoopdash_logo').setScale(scale).setAlpha(0);
+      // Snap Y to integer so logo doesn't sit on a half-pixel
+      const logoY    = Math.round(H * 0.025 + logoH / 2);
+      const logo     = this.add.image(W / 2, logoY, 'hoopdash_logo')
+        .setScale(scale)
+        .setAlpha(0);
       this.tweens.add({ targets: logo, alpha: 1, duration: 560, ease: 'Cubic.easeOut', delay: 80 });
     } else {
       logoH = Math.min(S * 0.13, 52) * 1.4;
-      const logoY = H * 0.025 + logoH / 2;
+      const logoY = Math.round(H * 0.025 + logoH / 2);
       const logo  = this.add.text(W / 2, logoY, '🏀 HOOP DASH', {
         fontFamily: '"Bebas Neue", Impact, sans-serif',
         fontSize: `${Math.min(S * 0.13, 52)}px`,
         color: '#ff6b35', stroke: '#7a2c00', strokeThickness: 4,
+        resolution: DPR,   // ← render text at device pixel ratio
       }).setOrigin(0.5).setAlpha(0);
       this.tweens.add({ targets: logo, alpha: 1, duration: 560, ease: 'Cubic.easeOut', delay: 80 });
     }
@@ -65,10 +83,11 @@ export class MenuScene extends Phaser.Scene {
     const ballSlotH    = avail * ballSlotFrac;
     const otherSlotH   = (avail * (1 - ballSlotFrac)) / 3;
 
-    const ballY = topUsed + ballSlotH * 0.55;
-    const bestY = topUsed + ballSlotH + otherSlotH * 0.50;
-    const btnY  = topUsed + ballSlotH + otherSlotH * 1.50;
-    const hintY = topUsed + ballSlotH + otherSlotH * 2.50;
+    // Snap all Y positions to integers — prevents sub-pixel blur
+    const ballY = Math.round(topUsed + ballSlotH * 0.55);
+    const bestY = Math.round(topUsed + ballSlotH + otherSlotH * 0.50);
+    const btnY  = Math.round(topUsed + ballSlotH + otherSlotH * 1.50);
+    const hintY = Math.round(topUsed + ballSlotH + otherSlotH * 2.50);
 
     // ── BASKETBALL ────────────────────────────────────────────────────────
     const ballDisplayR = Math.min(ballSlotH * 0.42, W * 0.18, 72);
@@ -83,7 +102,9 @@ export class MenuScene extends Phaser.Scene {
     );
     this.tweens.add({ targets: shadow, alpha: 0.5, duration: 320, delay: 480 });
 
-    const ballImg = this.add.image(W / 2, ballY, 'ball').setScale(ballScale).setAlpha(0);
+    const ballImg = this.add.image(W / 2, ballY, 'ball')
+      .setScale(ballScale)
+      .setAlpha(0);
     this.tweens.add({
       targets: ballImg, alpha: 1, duration: 360, delay: 460,
       onComplete: () => {
@@ -99,12 +120,18 @@ export class MenuScene extends Phaser.Scene {
 
     this.bestScorePill = this.add.graphics().setAlpha(0);
     this.bestScorePill.lineStyle(1, 0xd4a017, 0.6);
-    this.bestScorePill.strokeRoundedRect(W / 2 - pillW / 2, bestY - pillH / 2, pillW, pillH, pillH / 2);
+    this.bestScorePill.strokeRoundedRect(
+      Math.round(W / 2 - pillW / 2), Math.round(bestY - pillH / 2),
+      Math.round(pillW), Math.round(pillH),
+      pillH / 2
+    );
 
-    this.bestScoreText = this.add.text(W / 2, bestY, '', {
+    this.bestScoreText = this.add.text(Math.round(W / 2), bestY, '', {
       fontFamily: '"Bebas Neue", Impact, sans-serif',
       fontSize: `${Math.min(otherSlotH * 0.30, S * 0.048, 20)}px`,
-      color: '#d4a017', letterSpacing: 2,
+      color: '#d4a017',
+      letterSpacing: 2,
+      resolution: DPR,   // ← crisp on retina/mobile
     }).setOrigin(0.5).setAlpha(0);
 
     if (this.bestScore > 0) {
@@ -112,41 +139,73 @@ export class MenuScene extends Phaser.Scene {
       this.bestScoreText.setText('  BEST  ' + this.bestScore).setAlpha(1);
     }
 
-    // ── PLAY BUTTON ───────────────────────────────────────────────────────
-    const btnW = Math.min(W * 0.68, 260);
-    const btnH = Math.min(otherSlotH * 0.58, 56);
-    const btnR = 6;
+    // ── PLAY BUTTON (image) ───────────────────────────────────────────────
+    const playbtnTex = this.textures.exists('playbtn') ? this.textures.get('playbtn').source[0] : null;
 
-    const btnBg = this.add.graphics().setAlpha(0);
-    btnBg.lineStyle(1.4, 0xffffff, 0.55);
-    btnBg.strokeRoundedRect(W / 2 - btnW / 2, btnY - btnH / 2, btnW, btnH, btnR);
+    const playbtnImg = playbtnTex
+      ? (() => {
+          // LINEAR filter for smooth bilinear interpolation on a raster image.
+          // The source PNG is pre-resized to 560px (2× the 280px display cap) so
+          // the downscale ratio stays at ~2× max — small enough for LINEAR to look
+          // smooth with no harshness or aliasing on any mobile DPR.
+          this.textures.get('playbtn').setFilter(Phaser.Textures.FilterMode.LINEAR);
 
-    const btnTxt = this.add.text(W / 2, btnY, 'PLAY', {
-      fontFamily: '"Bebas Neue", Impact, sans-serif',
-      fontSize: `${Math.min(otherSlotH * 0.32, S * 0.060, 26)}px`,
-      color: '#ffffff', letterSpacing: 10,
-    }).setOrigin(0.5).setAlpha(0);
+          const targetW = Math.round(Math.min(W * 0.58, 280));
+          const targetH = Math.round((playbtnTex.height / playbtnTex.width) * targetW);
+
+          return this.add.image(W / 2, btnY, 'playbtn')
+            .setDisplaySize(targetW, targetH)
+            .setAlpha(0);
+        })()
+      : null;
+
+    // Fallback: plain text button if image didn't load
+    const btnBg  = !playbtnImg ? this.add.graphics().setAlpha(0) : null;
+    const btnTxt = !playbtnImg
+      ? this.add.text(Math.round(W / 2), btnY, 'PLAY', {
+          fontFamily: '"Bebas Neue", Impact, sans-serif',
+          fontSize: `${Math.min(otherSlotH * 0.32, S * 0.060, 26)}px`,
+          color: '#ffffff',
+          letterSpacing: 10,
+          resolution: DPR,
+        }).setOrigin(0.5).setAlpha(0)
+      : null;
+
+    const btnBgW = Math.min(W * 0.68, 260);
+    const btnBgH = Math.min(otherSlotH * 0.58, 56);
+    if (btnBg) {
+      btnBg.lineStyle(1.4, 0xffffff, 0.55);
+      btnBg.strokeRoundedRect(
+        Math.round(W / 2 - btnBgW / 2), Math.round(btnY - btnBgH / 2),
+        Math.round(btnBgW), Math.round(btnBgH),
+        6
+      );
+    }
+
+    const btnTargets = playbtnImg ? [playbtnImg] : [btnBg, btnTxt].filter(Boolean);
 
     this.tweens.add({
-      targets: [btnBg, btnTxt], alpha: 1, duration: 500, delay: 680, ease: 'Cubic.easeOut',
-      onComplete: () => {
-        this.btnPulseTween = this.tweens.add({
-          targets: [btnBg, btnTxt], alpha: { from: 1, to: 0.55 },
-          duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-        });
-      }
+      targets: btnTargets, alpha: 1, duration: 500, delay: 680, ease: 'Cubic.easeOut',
     });
 
-    // ── HINT ──────────────────────────────────────────────────────────────
-    this.add.text(W / 2, hintY, '  drag to aim  ·  release to throw  ', {
-      fontFamily: '"Arial", sans-serif',
-      fontSize: `${Math.min(otherSlotH * 0.24, S * 0.034, 18)}px`,
-      color: '#d0bb9d', letterSpacing: 1,
-    }).setOrigin(0.5).setAlpha(0.75);
+    // Hit area sized to match actual displayed image size
+    const _btnDisplayW = playbtnTex ? Math.round(Math.min(W * 0.58, 280)) : 0;
+    const _btnDisplayH = playbtnTex ? Math.round((playbtnTex.height / playbtnTex.width) * _btnDisplayW) : 0;
+    const hitW = playbtnImg ? (_btnDisplayW + 24) : btnBgW * 1.15;
+    const hitH = playbtnImg ? (_btnDisplayH + 24) : btnBgH * 1.8;
 
-    this.add.text(W - 10, H - 8, 'v1.0', {
-      fontFamily: '"Bebas Neue", Impact, sans-serif', fontSize: '9px', color: '#111820',
-    }).setOrigin(1, 1);
+    // ── HINT TEXT ─────────────────────────────────────────────────────────
+    this.add.text(Math.round(W / 2), hintY, 'drag to aim  ·  release to throw', {
+      fontFamily: '"Palatino Linotype", "Book Antiqua", Palatino, serif',
+      fontStyle: 'italic',
+      fontSize: `${Math.min(otherSlotH * 0.30, S * 0.040, 22)}px`,
+      color: '#3b0764',
+      stroke: '#6b21a8',
+      strokeThickness: 1,
+      shadow: { offsetX: 0, offsetY: 0, color: '#a855f7', blur: 0, fill: false },
+      letterSpacing: 2,
+      resolution: DPR,
+    }).setOrigin(0.5).setAlpha(1);
 
     // ── INPUT ─────────────────────────────────────────────────────────────
     const startGame = () => {
@@ -157,33 +216,29 @@ export class MenuScene extends Phaser.Scene {
     };
 
     const hitArea = this.add
-      .rectangle(W / 2, btnY, btnW * 1.15, btnH * 1.8, 0xffffff, 0)
+      .rectangle(Math.round(W / 2), btnY, hitW, hitH, 0xffffff, 0)
       .setInteractive({ useHandCursor: true });
 
     hitArea.on('pointerdown', startGame);
     hitArea.on('pointerover', () => {
-      this.tweens.killTweensOf(btnBg);
-      this.tweens.killTweensOf(btnTxt);
-      btnBg.clear();
-      btnBg.lineStyle(1.6, 0xd4a017, 1);
-      btnBg.strokeRoundedRect(W / 2 - btnW / 2, btnY - btnH / 2, btnW, btnH, btnR);
-      btnBg.setAlpha(1);
-      btnTxt.setAlpha(1);
-      btnTxt.setStyle({ color: '#d4a017' });
+      this.tweens.killTweensOf(btnTargets);
+      btnTargets.forEach(t => t.setAlpha(1));
+      if (playbtnImg) {
+        const targetW = Math.round(Math.min(W * 0.58, 280) * 1.04);
+        const targetH = Math.round((playbtnTex.height / playbtnTex.width) * targetW);
+        playbtnImg.setDisplaySize(targetW, targetH);
+      }
+      if (btnTxt) btnTxt.setStyle({ color: '#d4a017' });
     });
     hitArea.on('pointerout', () => {
-      this.tweens.killTweensOf(btnBg);
-      this.tweens.killTweensOf(btnTxt);
-      btnBg.clear();
-      btnBg.lineStyle(1.4, 0xffffff, 0.55);
-      btnBg.strokeRoundedRect(W / 2 - btnW / 2, btnY - btnH / 2, btnW, btnH, btnR);
-      btnBg.setAlpha(1);
-      btnTxt.setAlpha(1);
-      btnTxt.setStyle({ color: '#ffffff' });
-      this.btnPulseTween = this.tweens.add({
-        targets: [btnBg, btnTxt], alpha: { from: 1, to: 0.55 },
-        duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-      });
+      this.tweens.killTweensOf(btnTargets);
+      btnTargets.forEach(t => t.setAlpha(1));
+      if (playbtnImg) {
+        const targetW = Math.round(Math.min(W * 0.58, 280));
+        const targetH = Math.round((playbtnTex.height / playbtnTex.width) * targetW);
+        playbtnImg.setDisplaySize(targetW, targetH);
+      }
+      if (btnTxt) btnTxt.setStyle({ color: '#ffffff' });
     });
 
     this.input.keyboard && this.input.keyboard.on('keydown-SPACE', startGame);
@@ -195,9 +250,6 @@ export class MenuScene extends Phaser.Scene {
     YTPlayables.onAudioEnabledChange(en => soundManager.setEnabled(en));
     soundManager.setEnabled(YTPlayables.isAudioEnabled());
 
-    // CRITICAL: gameReady MUST be called synchronously at end of create().
-    // Never delay it inside async/await — the menu is now interactive.
-    // YouTube removes its loading spinner only after this fires.
     YTPlayables.gameReady();
     console.log('[YT] gameReady fired from MenuScene.create()');
   }
