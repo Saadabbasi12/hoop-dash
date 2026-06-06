@@ -10,6 +10,7 @@ import menubgPortraitUrl from '../assets/menubgportrait.png';
 import menubgLandscapeUrl from '../assets/menubglandscape.png';
 import playbtnUrl from '../assets/playbtn.png';
 import gameoverbgUrl from '../assets/gameoverbg.png';
+import scorebgUrl from '../assets/scorebg.png';
 import playagainbtnUrl from '../assets/playagainbtn.png';
 import menubtnUrl from '../assets/menubtn.png';
 
@@ -28,6 +29,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('menubglandscape', menubgLandscapeUrl);
     this.load.image('playbtn', playbtnUrl);
     this.load.image('gameoverbg', gameoverbgUrl);
+    this.load.image('scorebg', scorebgUrl);
     this.load.image('playagainbtn', playagainbtnUrl);
     this.load.image('menubtn', menubtnUrl);
 

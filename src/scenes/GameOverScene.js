@@ -149,24 +149,35 @@ export class GameOverScene extends Phaser.Scene {
     const cardX     = W / 2 - cardW / 2;
     const cardR     = 18;
 
-    const cardG = this.add.graphics().setDepth(1).setAlpha(0);
-    // White fill
-    cardG.fillStyle(0xffffff, 0.95);
-    cardG.fillRoundedRect(cardX, cardTop, cardW, cardH, cardR);
-    // Subtle purple top glow
-    cardG.fillGradientStyle(0xa855f7, 0xa855f7, 0xffffff, 0xffffff, 0.10, 0.10, 0, 0);
-    cardG.fillRoundedRect(cardX, cardTop, cardW, cardH * 0.45, { tl: cardR, tr: cardR, bl: 0, br: 0 });
-    // Top shine
-    cardG.fillStyle(0xffffff, 0.40);
-    cardG.fillRoundedRect(cardX + 3, cardTop + 3, cardW - 6, cardH * 0.18, { tl: cardR - 2, tr: cardR - 2, bl: 0, br: 0 });
-    // Outer glow border
-    cardG.lineStyle(3, 0xa855f7, 0.35);
-    cardG.strokeRoundedRect(cardX - 2, cardTop - 2, cardW + 4, cardH + 4, cardR + 2);
-    // Crisp inner border
-    cardG.lineStyle(1, 0x6b21a8, 0.25);
-    cardG.strokeRoundedRect(cardX, cardTop, cardW, cardH, cardR);
+    // ── CARD: background.png cropped to rounded rect via geometry mask ───
+    const cardMaskShape = this.add.graphics();
+    cardMaskShape.fillStyle(0xffffff, 1);
+    cardMaskShape.fillRoundedRect(cardX, cardTop, cardW, cardH, cardR);
+    const cardMask = cardMaskShape.createGeometryMask();
+    cardMaskShape.setVisible(false);
 
-    this.tweens.add({ targets: cardG, alpha: 1, duration: 380, ease: 'Cubic.easeOut' });
+    const cardBgItems = [];
+    if (this.textures.exists('scorebg')) {
+      const bgTex = this.textures.get('scorebg').source[0];
+      const bgScale = Math.max(cardW / bgTex.width, cardH / bgTex.height);
+      const cardBgImg = this.add.image(cardX + cardW / 2, cardTop + cardH / 2, 'scorebg')
+        .setScale(bgScale).setDepth(1).setAlpha(0).setMask(cardMask);
+      cardBgItems.push(cardBgImg);
+    }
+
+    // Purple tint overlay on top of bg
+    const cardTint = this.add.graphics().setDepth(1).setAlpha(0).setMask(cardMask);
+    cardTint.fillStyle(0x6b21a8, 0.22);
+    cardTint.fillRoundedRect(cardX, cardTop, cardW, cardH, cardR);
+
+    // Border (no mask — always fully visible)
+    const cardBorder = this.add.graphics().setDepth(1).setAlpha(0);
+    cardBorder.lineStyle(3, 0xa855f7, 0.55);
+    cardBorder.strokeRoundedRect(cardX - 1, cardTop - 1, cardW + 2, cardH + 2, cardR + 1);
+    cardBorder.lineStyle(1, 0x6b21a8, 0.4);
+    cardBorder.strokeRoundedRect(cardX, cardTop, cardW, cardH, cardR);
+
+    this.tweens.add({ targets: [...cardBgItems, cardTint, cardBorder], alpha: 1, duration: 380, ease: 'Cubic.easeOut' });
 
     if (!isNewBest && this.textures.exists('gameover_img')) {
       const tex   = this.textures.get('gameover_img').source[0];
@@ -417,23 +428,27 @@ export class GameOverScene extends Phaser.Scene {
     const hexColor = '#' + color.toString(16).padStart(6, '0');
     const g = this.add.graphics().setDepth(2);
 
-    // ── White background ──────────────────────────────────────────────────
-    g.fillStyle(0xffffff, 0.95);
-    g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
+    // ── background.png cropped to stat box via geometry mask ────────────
+    const sMaskShape = this.add.graphics();
+    sMaskShape.fillStyle(0xffffff, 1);
+    sMaskShape.fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
+    const sMask = sMaskShape.createGeometryMask();
+    sMaskShape.setVisible(false);
 
-    // ── Subtle purple-tinted top gradient overlay ──────────────────────────
-    g.fillGradientStyle(0xa855f7, 0xa855f7, 0xffffff, 0xffffff, 0.08, 0.08, 0, 0);
-    g.fillRoundedRect(x - w / 2, y - h / 2, w, h / 2, { tl: 12, tr: 12, bl: 0, br: 0 });
+    if (this.textures.exists('scorebg')) {
+      const bgTex  = this.textures.get('scorebg').source[0];
+      const bgSc   = Math.max(w / bgTex.width, h / bgTex.height);
+      this.add.image(x, y, 'scorebg').setScale(bgSc).setDepth(2).setMask(sMask);
+    }
 
-    // ── Top shine highlight ────────────────────────────────────────────────
-    g.fillStyle(0xffffff, 0.60);
-    g.fillRoundedRect(x - w / 2 + 2, y - h / 2 + 2, w - 4, Math.round(h * 0.28), { tl: 10, tr: 10, bl: 0, br: 0 });
+    // Purple tint overlay
+    const tint = this.add.graphics().setDepth(2).setMask(sMask);
+    tint.fillStyle(0x6b21a8, 0.22);
+    tint.fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
 
-    // ── Outer glow ring ───────────────────────────────────────────────────
-    g.lineStyle(4, 0xa855f7, 0.22);
-    g.strokeRoundedRect(x - w / 2 - 2, y - h / 2 - 2, w + 4, h + 4, 14);
-
-    // ── Inner crisp border ────────────────────────────────────────────────
+    // Border (no mask)
+    g.lineStyle(3, 0xa855f7, 0.55);
+    g.strokeRoundedRect(x - w / 2 - 1, y - h / 2 - 1, w + 2, h + 2, 13);
     g.lineStyle(1.5, 0x6b21a8, 0.5);
     g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 12);
 
