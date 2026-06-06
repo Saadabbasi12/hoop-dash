@@ -114,11 +114,10 @@ export class GameScene extends Phaser.Scene {
     this.H = gameSize.height;
   }
 
-  // ── BACKGROUND — Premium brick walls + dark court floor ─────────────────
+  // ── BACKGROUND ────────────────────────────────────────────────────────────
   _buildBackground() {
     const { W, H } = this;
 
-    // ── BACKGROUND IMAGE — matt black texture fills entire screen ────────────
     if (this.textures.exists('bg')) {
       this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
     } else {
@@ -127,115 +126,10 @@ export class GameScene extends Phaser.Scene {
       bg.fillRect(0, 0, W, H);
     }
 
-    // ── BRICK WALLS ───────────────────────────────────────────────────────────
-    const wallW = Math.round(W * 0.082);
-    const wallGfx = this.add.graphics().setDepth(-10);
-    this._drawBrickWall(wallGfx, 0,          0, wallW, H, false);
-    this._drawBrickWall(wallGfx, W - wallW,  0, wallW, H, true);
-
-    // ── CLEAN HARD SHADOW — just a 1px dark line, no bleed into court ────────
-    wallGfx.lineStyle(1, 0x000000, 1);
-    wallGfx.lineBetween(wallW,     0, wallW,     H);
-    wallGfx.lineBetween(W - wallW, 0, W - wallW, H);
-
-    // Store wall boundaries for ball bounce
-    this.leftWallX  = wallW;
-    this.rightWallX = W - wallW;
+    // Wall boundaries span the full screen width
+    this.leftWallX  = 0;
+    this.rightWallX = W;
   }
-
-  /**
-   * Draw a tiled brick wall — cool dark grey-blue palette, crisp mortar.
-   */
- _drawBrickWall(g, x, y, w, h, flipOffset = false) {
-  // Ensure the main bounding box sits perfectly on whole pixels
-  x = Math.round(x);
-  y = Math.round(y);
-  w = Math.round(w);
-  h = Math.round(h);
-
-  const bW   = Math.round(w * 0.6);
-  const bH   = Math.round(w * 0.36);
-  const rows = Math.ceil(h / bH) + 2;
-
-  // ── PREMIUM BASE (clean dark slate, not flat black) ────────────────
-  g.fillStyle(0x121826, 1);
-  g.fillRect(x, y, w, h);
-
-  for (let r = 0; r < rows; r++) {
-    // Snap row Y coordinate tightly to an integer
-    const bY   = Math.round(y + r * bH);
-    
-    // Bounds check to stop drawing rows completely outside the height
-    if (bY >= y + h) break; 
-
-    const offX = (r % 2 === (flipOffset ? 0 : 1))
-      ? Math.round(bW * 0.5)
-      : 0;
-
-    // ── smoother high-end brick variation (no harsh jumps) ──────────
-    const base = 105 + ((r * 7 + (flipOffset ? 3 : 0)) % 18);
-
-    const brickR = base + 8;
-    const brickG = base + 10;
-    const brickB = base + 14;
-
-    const brickCol = (brickR << 16) | (brickG << 8) | brickB;
-
-    for (let bx = x - bW + offX; bx < x + w; bx += bW) {
-      // Keep structural boundaries perfectly integer-snapped
-      let bLeft  = Math.round(Math.max(bx, x));
-      let bRight = Math.round(Math.min(bx + bW - 2, x + w));
-      if (bRight <= bLeft) continue;
-
-      let bw = bRight - bLeft;
-
-      // ── MAIN BRICK FACE ───────────────────────────────────────────
-      // Shifting Y by 1 down and padding height preserves crisp integer bounds
-      g.fillStyle(brickCol, 1);
-      g.fillRect(bLeft, bY + 1, bw, bH - 2);
-
-      // ── PREMIUM LIGHT TOP BEVEL (soft highlight) ──────────────────
-      g.fillStyle(0xffffff, 0.06);
-      g.fillRect(bLeft, bY + 1, bw, 2);
-
-      // ── SOFT INNER SHADOW (gives depth, not harsh lines) ──────────
-      g.fillStyle(0x000000, 0.12);
-      g.fillRect(bLeft, bY + bH - 3, bw, 2);
-
-      // ── PIXEL-CRISP EDGES (Using fillRect instead of lineBetween) ─
-      // fillRect uses exact pixel coordinates, avoiding the 0.5px line-straddle blur.
-      
-      // Left Edge (subtle light hit)
-      g.fillStyle(0xd6e2ff, 0.18);
-      g.fillRect(bLeft, bY + 1, 1, bH - 2);
-
-      // Right Edge (depth cut) - placed precisely inside the brick edge
-      g.fillStyle(0x0a0f18, 0.9);
-      g.fillRect(bLeft + bw - 1, bY + 1, 1, bH - 2);
-    }
-
-    // ── CLEAN ROW SEPARATION ─────────────────────────────────────────
-    // Replaced lineBetween with a 1px tall fillRect to keep the mortar razor-sharp
-    g.fillStyle(0x0a0f16, 0.5);
-    g.fillRect(x, bY, w, 1);
-  }
-
-  // ── PREMIUM VIGNETTE (very subtle depth like AAA games) ─────────────
-  // Enforcing whole pixel coordinates here ensures the gradient cuts off cleanly
-  if (!flipOffset) {
-    g.fillGradientStyle(
-      0x000000, 0x000000, 0x000000, 0x000000,
-      0, 0.25, 0, 0.25
-    );
-    g.fillRect(Math.round(x + w - 10), y, 10, h);
-  } else {
-    g.fillGradientStyle(
-      0x000000, 0x000000, 0x000000, 0x000000,
-      0.25, 0, 0.25, 0
-    );
-    g.fillRect(x, y, 10, h);
-  }
-}
 
   // ══════════════════════════════════════════════════════════════════════════
   //  SPRING NET SYSTEM
@@ -267,6 +161,7 @@ export class GameScene extends Phaser.Scene {
         .setScale(scale)
         .setDepth(5)
         .setAlpha(1.0)
+        .setTint(0xffffff)
         .setAngle(basket.tiltDeg || 0);
 
       const imgFront = this.add.image(basket.x, basket.y, texKey)
@@ -274,6 +169,7 @@ export class GameScene extends Phaser.Scene {
         .setScale(scale)
         .setDepth(9)
         .setAlpha(0)
+        .setTint(0xffffff)
         .setAngle(basket.tiltDeg || 0);
 
       basket.netImg      = imgBack;
