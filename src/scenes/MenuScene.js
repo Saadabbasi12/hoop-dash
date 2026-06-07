@@ -90,7 +90,10 @@ export class MenuScene extends Phaser.Scene {
     const hintY = Math.round(topUsed + ballSlotH + otherSlotH * 2.50);
 
     // ── BASKETBALL ────────────────────────────────────────────────────────
-    const ballDisplayR = Math.min(ballSlotH * 0.42, W * 0.18, 72);
+    // On portrait/mobile screens reduce the ball radius so it doesn't dominate the layout.
+    const ballDisplayR = isPortrait
+      ? Math.min(ballSlotH * 0.32, W * 0.14, 54)
+      : Math.min(ballSlotH * 0.42, W * 0.18, 72);
     const ballTexW     = this.textures.get('ball') && this.textures.get('ball').source[0]
       ? this.textures.get('ball').source[0].width : 52;
     const ballScale    = (ballDisplayR * 2) / ballTexW;
