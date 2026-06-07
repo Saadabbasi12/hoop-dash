@@ -117,9 +117,23 @@ export class GameScene extends Phaser.Scene {
   // ── BACKGROUND ────────────────────────────────────────────────────────────
   _buildBackground() {
     const { W, H } = this;
+    const isPortrait = H > W;
 
-    if (this.textures.exists('bg')) {
-      this.add.image(W / 2, H / 2, 'bg').setDisplaySize(W, H).setDepth(-20);
+    // Use dedicated portrait/landscape game backgrounds (cropped from background.png).
+    // Falls back to 'bg' if assets haven't loaded for any reason.
+    const _bgKey = isPortrait
+      ? (this.textures.exists('gamebgportrait')  ? 'gamebgportrait'  : 'bg')
+      : (this.textures.exists('gamebglandscape') ? 'gamebglandscape' : 'bg');
+
+    if (this.textures.exists(_bgKey)) {
+      // LINEAR filter: smooth bilinear interpolation on high-DPR mobile screens.
+      this.textures.get(_bgKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
+
+      // setDisplaySize forces the full image to fill the exact screen dimensions —
+      // no cropping, no cover-scale overflow. The entire background is always visible.
+      this.add.image(W / 2, H / 2, _bgKey)
+        .setDisplaySize(W, H)
+        .setDepth(-20);
     } else {
       const bg = this.add.graphics().setDepth(-20);
       bg.fillStyle(0x050a14, 1);

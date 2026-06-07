@@ -4,7 +4,8 @@ import { soundManager } from '../utils/SoundManager.js';
 import hoopdashUrl from '../assets/hoopdash.png';
 import basketballUrl from '../assets/basketball.png';
 import basketUrl from '../assets/basket.png';
-import backgroundUrl from '../assets/background.png';
+import gamebgPortraitUrl from '../assets/gamebgportrait.png';
+import gamebgLandscapeUrl from '../assets/gamebglandscape.png';
 import gameoverUrl from '../assets/gameover.png';
 import menubgPortraitUrl from '../assets/menubgportrait.png';
 import menubgLandscapeUrl from '../assets/menubglandscape.png';
@@ -19,7 +20,8 @@ export class BootScene extends Phaser.Scene {
 
   preload() {
     this.load.image('basketball_png', basketballUrl);
-    this.load.image('bg', backgroundUrl);
+    this.load.image('gamebgportrait',  gamebgPortraitUrl);
+    this.load.image('gamebglandscape', gamebgLandscapeUrl);
     this.load.on('filecomplete-image-basketball_png', () => { this._usePng = true; });
     this.load.on('filefailed-image-basketball_png',  () => { this._usePng = false; });
     this.load.image('basket_net', basketUrl);
